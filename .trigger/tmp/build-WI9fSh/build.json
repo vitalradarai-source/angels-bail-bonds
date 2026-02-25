@@ -1,0 +1,100 @@
+{
+  "build": {
+  },
+  "cliPackageVersion": "4.4.1",
+  "config": {
+    "dirs": [
+      "./src/trigger"
+    ],
+    "project": "proj_ylumvpynnyjymaslqmhw"
+  },
+  "configPath": "/Users/emmanuelpableo/Workspaces/angels-bail-bonds/.trigger/tmp/build-WI9fSh/Workspaces/angels-bail-bonds/trigger.config.mjs",
+  "contentHash": "6e7df035214baff23077e02613f57aab",
+  "customConditions": [
+  ],
+  "deploy": {
+    "env": {
+    }
+  },
+  "environment": "dev",
+  "externals": [
+    {
+      "name": "import-in-the-middle",
+      "version": "1.11.0"
+    }
+  ],
+  "files": [
+    {
+      "entry": "src/trigger/example.ts",
+      "out": "/Users/emmanuelpableo/Workspaces/angels-bail-bonds/.trigger/tmp/build-WI9fSh/Workspaces/angels-bail-bonds/src/trigger/example.mjs"
+    }
+  ],
+  "indexWorkerEntryPoint": "/Users/emmanuelpableo/Workspaces/angels-bail-bonds/.trigger/tmp/build-WI9fSh/.npm/_npx/f51a09bd0abf5f10/node_modules/trigger.dev/dist/esm/entryPoints/dev-index-worker.mjs",
+  "otelImportHook": {
+    "include": [
+    ]
+  },
+  "outputHashes": {
+    "/Users/emmanuelpableo/Workspaces/angels-bail-bonds/.trigger/tmp/build-WI9fSh/.npm/_npx/f51a09bd0abf5f10/node_modules/trigger.dev/dist/esm/entryPoints/dev-index-worker.mjs": "thD7tVfq6ic",
+    "/Users/emmanuelpableo/Workspaces/angels-bail-bonds/.trigger/tmp/build-WI9fSh/.npm/_npx/f51a09bd0abf5f10/node_modules/trigger.dev/dist/esm/entryPoints/dev-index-worker.mjs.map": "TH3laFqOXLQ",
+    "/Users/emmanuelpableo/Workspaces/angels-bail-bonds/.trigger/tmp/build-WI9fSh/.npm/_npx/f51a09bd0abf5f10/node_modules/trigger.dev/dist/esm/entryPoints/dev-run-worker.mjs": "Y3Kd+gn3Z3I",
+    "/Users/emmanuelpableo/Workspaces/angels-bail-bonds/.trigger/tmp/build-WI9fSh/.npm/_npx/f51a09bd0abf5f10/node_modules/trigger.dev/dist/esm/entryPoints/dev-run-worker.mjs.map": "CIRstyIXoCQ",
+    "/Users/emmanuelpableo/Workspaces/angels-bail-bonds/.trigger/tmp/build-WI9fSh/Workspaces/angels-bail-bonds/src/trigger/example.mjs": "aYTGKwCrbz4",
+    "/Users/emmanuelpableo/Workspaces/angels-bail-bonds/.trigger/tmp/build-WI9fSh/Workspaces/angels-bail-bonds/src/trigger/example.mjs.map": "r3Uan7QHtW4",
+    "/Users/emmanuelpableo/Workspaces/angels-bail-bonds/.trigger/tmp/build-WI9fSh/Workspaces/angels-bail-bonds/trigger.config.mjs": "CxJXcjwfnN4",
+    "/Users/emmanuelpableo/Workspaces/angels-bail-bonds/.trigger/tmp/build-WI9fSh/Workspaces/angels-bail-bonds/trigger.config.mjs.map": "7bhxbwmQbsk",
+    "/Users/emmanuelpableo/Workspaces/angels-bail-bonds/.trigger/tmp/build-WI9fSh/chunk-3AX4W7QB.mjs": "VhwwMgxMP7k",
+    "/Users/emmanuelpableo/Workspaces/angels-bail-bonds/.trigger/tmp/build-WI9fSh/chunk-3AX4W7QB.mjs.map": "tugLaVT06bg",
+    "/Users/emmanuelpableo/Workspaces/angels-bail-bonds/.trigger/tmp/build-WI9fSh/chunk-6L3DBTMP.mjs": "pnVzG1Cs3O8",
+    "/Users/emmanuelpableo/Workspaces/angels-bail-bonds/.trigger/tmp/build-WI9fSh/chunk-6L3DBTMP.mjs.map": "JZmVvNwm4gI",
+    "/Users/emmanuelpableo/Workspaces/angels-bail-bonds/.trigger/tmp/build-WI9fSh/chunk-BDBG766A.mjs": "xjSD20qNRfM",
+    "/Users/emmanuelpableo/Workspaces/angels-bail-bonds/.trigger/tmp/build-WI9fSh/chunk-BDBG766A.mjs.map": "VP+Zya5h4hw",
+    "/Users/emmanuelpableo/Workspaces/angels-bail-bonds/.trigger/tmp/build-WI9fSh/chunk-CTDAWCTK.mjs": "pjmNPzgoVKg",
+    "/Users/emmanuelpableo/Workspaces/angels-bail-bonds/.trigger/tmp/build-WI9fSh/chunk-CTDAWCTK.mjs.map": "922Py0nEmuE",
+    "/Users/emmanuelpableo/Workspaces/angels-bail-bonds/.trigger/tmp/build-WI9fSh/chunk-FUV6SSYK.mjs": "Mad/q9MtDLc",
+    "/Users/emmanuelpableo/Workspaces/angels-bail-bonds/.trigger/tmp/build-WI9fSh/chunk-FUV6SSYK.mjs.map": "9IFojZihDyA",
+    "/Users/emmanuelpableo/Workspaces/angels-bail-bonds/.trigger/tmp/build-WI9fSh/chunk-PTKATOQQ.mjs": "v6jHrgJlLIg",
+    "/Users/emmanuelpableo/Workspaces/angels-bail-bonds/.trigger/tmp/build-WI9fSh/chunk-PTKATOQQ.mjs.map": "lp7njGYmm/o",
+    "/Users/emmanuelpableo/Workspaces/angels-bail-bonds/.trigger/tmp/build-WI9fSh/chunk-WZGQJWAS.mjs": "Y9pY3LOEHVY",
+    "/Users/emmanuelpableo/Workspaces/angels-bail-bonds/.trigger/tmp/build-WI9fSh/chunk-WZGQJWAS.mjs.map": "LMPzUuAiOIM",
+    "/Users/emmanuelpableo/Workspaces/angels-bail-bonds/.trigger/tmp/build-WI9fSh/crypto.node-5HPPZ5PO.mjs": "Hosiis4RK5g",
+    "/Users/emmanuelpableo/Workspaces/angels-bail-bonds/.trigger/tmp/build-WI9fSh/crypto.node-5HPPZ5PO.mjs.map": "f+DirqJ/vQY",
+    "/Users/emmanuelpableo/Workspaces/angels-bail-bonds/.trigger/tmp/build-WI9fSh/crypto.node-OZIG7C7V.mjs": "xL7AWEo5LhA",
+    "/Users/emmanuelpableo/Workspaces/angels-bail-bonds/.trigger/tmp/build-WI9fSh/crypto.node-OZIG7C7V.mjs.map": "0b4tlwmkM3g",
+    "/Users/emmanuelpableo/Workspaces/angels-bail-bonds/.trigger/tmp/build-WI9fSh/esm-HF64XN43.mjs": "/ASyNSMg03k",
+    "/Users/emmanuelpableo/Workspaces/angels-bail-bonds/.trigger/tmp/build-WI9fSh/esm-HF64XN43.mjs.map": "CYqZQcavdAI",
+    "/Users/emmanuelpableo/Workspaces/angels-bail-bonds/.trigger/tmp/build-WI9fSh/esm-UJZXZXFH.mjs": "vyj8FKrApaI",
+    "/Users/emmanuelpableo/Workspaces/angels-bail-bonds/.trigger/tmp/build-WI9fSh/esm-UJZXZXFH.mjs.map": "VON93E1In1A",
+    "/Users/emmanuelpableo/Workspaces/angels-bail-bonds/.trigger/tmp/build-WI9fSh/getMachineId-bsd-CQRW3DPG.mjs": "244piLhuSIA",
+    "/Users/emmanuelpableo/Workspaces/angels-bail-bonds/.trigger/tmp/build-WI9fSh/getMachineId-bsd-CQRW3DPG.mjs.map": "dIKKZ8MMNl8",
+    "/Users/emmanuelpableo/Workspaces/angels-bail-bonds/.trigger/tmp/build-WI9fSh/getMachineId-darwin-VNZGFVBR.mjs": "960+ecDyqc0",
+    "/Users/emmanuelpableo/Workspaces/angels-bail-bonds/.trigger/tmp/build-WI9fSh/getMachineId-darwin-VNZGFVBR.mjs.map": "xJrfS7fTZLk",
+    "/Users/emmanuelpableo/Workspaces/angels-bail-bonds/.trigger/tmp/build-WI9fSh/getMachineId-linux-TYVV4ZLT.mjs": "Mu4BzqEE9PY",
+    "/Users/emmanuelpableo/Workspaces/angels-bail-bonds/.trigger/tmp/build-WI9fSh/getMachineId-linux-TYVV4ZLT.mjs.map": "iGLn8Cz4sPg",
+    "/Users/emmanuelpableo/Workspaces/angels-bail-bonds/.trigger/tmp/build-WI9fSh/getMachineId-unsupported-5IRX77GI.mjs": "Ca/HGT5QNLM",
+    "/Users/emmanuelpableo/Workspaces/angels-bail-bonds/.trigger/tmp/build-WI9fSh/getMachineId-unsupported-5IRX77GI.mjs.map": "L7KXQNW7Eqw",
+    "/Users/emmanuelpableo/Workspaces/angels-bail-bonds/.trigger/tmp/build-WI9fSh/getMachineId-win-KAUWWGCN.mjs": "9b/UQB1v9SE",
+    "/Users/emmanuelpableo/Workspaces/angels-bail-bonds/.trigger/tmp/build-WI9fSh/getMachineId-win-KAUWWGCN.mjs.map": "O6wx6Q5hFOU",
+    "/Users/emmanuelpableo/Workspaces/angels-bail-bonds/.trigger/tmp/build-WI9fSh/s2s-PMJ3SQAO.mjs": "+xwzlsEjF8E",
+    "/Users/emmanuelpableo/Workspaces/angels-bail-bonds/.trigger/tmp/build-WI9fSh/s2s-PMJ3SQAO.mjs.map": "JWc/RCQavD4"
+  },
+  "outputPath": "/Users/emmanuelpableo/Workspaces/angels-bail-bonds/.trigger/tmp/build-WI9fSh",
+  "packageVersion": "4.4.1",
+  "runWorkerEntryPoint": "/Users/emmanuelpableo/Workspaces/angels-bail-bonds/.trigger/tmp/build-WI9fSh/.npm/_npx/f51a09bd0abf5f10/node_modules/trigger.dev/dist/esm/entryPoints/dev-run-worker.mjs",
+  "runtime": "node",
+  "sources": {
+    "package.json": {
+      "contentHash": "22f3cd4d518efc71be2d9a5af5d8e160",
+      "contents": "eJyr5lJQUEpJLUjNS0nNS85MLVayUqgGigFFHUqKMtPTU4v0UlLL9ItTsoEySnEmeiZ6hkpABbU6EJ1lLoQ1J5Vm5qSgaeeq5QIAwesi6g=="
+    },
+    "src/trigger/example.ts": {
+      "contentHash": "d708cb3e711ebb53edb160de0b1d3364",
+      "contents": "eJxtjsFOhDAURfd8xZW4YBKEhTsmY9yYuDYmbqnw7CClJa9lGEKa+BF+oV9ii5Powu2775x7u2E07LDCCdvD443NgPTecSclcdHSqbRtX55u032SlCUezmIYFeFVNL1kM+n2h/z6+ASTFgOVTKMSDcEdOwthsZiJMbJ5p8YhMLNN6Ly1NkZbhyMpZV4Mq/Y5mg6bMFsToGsrpFt8M8c8zcORJ10F7aIbZKNYlBHha8VA1gpJFWzYriX8Doc7RAu2HqOoUEZm9dOkdXzYZs+dO/6i1+tFWFxOvt7tNwOTm1j/rakf4678H+aqho+UzxMf8G8JNXmg"
+    },
+    "trigger.config.ts": {
+      "contentHash": "d8d235b1c109adfa3fffec6363493955",
+      "contents": "eJxVjcsKgzAUBff5iktWLYgRpBvdFNq/KKUEE23UPHqTWIP479XSTXcH5gyjtLMYYAEhW2XkxZpWdbBCi1YDPQdUXScxF3JiXgxsKmlNiJy/0qbwOIY/9bAQAIe2l02ogO7rkcaoJ5eMSX3S3I8v/XzTbPsJhb6CG82Zx4b9WvS+I83na0QelDUVlEWRAWNwAq1MDNLvGJxECNwPgNGQ9ViTD64WRXU="
+    }
+  },
+  "target": "dev"
+}

@@ -1,0 +1,21 @@
+{
+  "configPath": "/Users/emmanuelpableo/Workspaces/angels-bail-bonds/.trigger/tmp/build-WI9fSh/Workspaces/angels-bail-bonds/trigger.config.mjs",
+  "customConditions": [
+  ],
+  "queues": [
+  ],
+  "runtime": "node",
+  "runtimeVersion": "25.6.1",
+  "tasks": [
+    {
+      "entryPoint": "/Users/emmanuelpableo/Workspaces/angels-bail-bonds/.trigger/tmp/build-WI9fSh/Workspaces/angels-bail-bonds/src/trigger/example.mjs",
+      "filePath": "src/trigger/example.ts",
+      "id": "hello-world",
+      "maxDuration": 300
+    }
+  ],
+  "timings": {
+    "src/trigger/example.ts": 0.48362500000001774
+  },
+  "workerEntryPoint": "/Users/emmanuelpableo/Workspaces/angels-bail-bonds/.trigger/tmp/build-WI9fSh/.npm/_npx/f51a09bd0abf5f10/node_modules/trigger.dev/dist/esm/entryPoints/dev-run-worker.mjs"
+}

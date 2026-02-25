@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../../../../../../src/trigger/example.ts"],
+  "sourcesContent": ["import { task } from \"@trigger.dev/sdk/v3\";\n\n// Example background task — rename/replace this as your project grows\nexport const helloWorldTask = task({\n  id: \"hello-world\",\n  run: async (payload: { message: string }) => {\n    console.log(`Running task with message: ${payload.message}`);\n    return { message: `Hello, ${payload.message}!` };\n  },\n});\n"],
+  "mappings": ";;;;;;;;;;AAAA;AAGO,IAAM,iBAAiB,KAAK;AAAA,EACjC,IAAI;AAAA,EACJ,KAAK,8BAAO,YAAiC;AAC3C,YAAQ,IAAI,8BAA8B,QAAQ,OAAO,EAAE;AAC3D,WAAO,EAAE,SAAS,UAAU,QAAQ,OAAO,IAAI;AAAA,EACjD,GAHK;AAIP,CAAC;",
+  "names": []
+}
