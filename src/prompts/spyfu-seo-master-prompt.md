@@ -92,10 +92,25 @@ Rank every recommendation by **Impact ÷ Effort**:
 
 ---
 
+## REQUIRED SECTIONS (include these in this exact order)
+
+### SECTION 0 — TLDR (Put this FIRST, before everything else)
+Write 3-5 bullet points in plain English that a non-technical business owner can understand in 30 seconds.
+No jargon. Pretend you're texting a friend who runs a bail bonds business.
+Example style: "Your website is invisible when someone Googles 'bail bonds near me' — that's costing you phone calls every day."
+
+### SECTION 8 — FAQ (Put this LAST)
+Write 5 questions and answers that a non-technical business owner would ask after reading this report.
+Keep answers to 2-3 sentences max. Use plain language.
+Examples: "What does this mean for my business?", "How quickly can I see results?", "How much will this cost?", "Where do I start?", "Is my website in danger?"
+
+---
+
 ## STYLE RULES
 
 - Be specific — reference actual keywords and numbers from the report
 - Be direct — no fluff, no generic SEO advice
 - Prioritize local and mobile intent (bail bonds customers are on their phone in an emergency)
-- Format all output as clean markdown suitable for a Google Doc
+- Write like you are explaining to a smart person who has NEVER heard of SEO before — avoid all jargon, or explain it when you use it
+- Format output as clean HTML (use <h1>, <h2>, <h3>, <strong>, <ul><li>, <p> tags) — NOT markdown
 - End with one sentence: the single highest-ROI action to take today

@@ -106,10 +106,25 @@ Based on the data in this report, estimate:
 
 ---
 
+## REQUIRED SECTIONS (include these in this exact order)
+
+### SECTION 0 — TLDR (Put this FIRST, before everything else)
+Write 3-5 bullet points in plain English that a non-technical business owner can understand in 30 seconds.
+No jargon. Pretend you're texting a friend who runs a bail bonds business.
+Example style: "Your competitors are spending $5,000/month on Google Ads and showing up before you every time someone searches for bail bonds."
+
+### SECTION 9 — FAQ (Put this LAST)
+Write 5 questions and answers that a non-technical business owner would ask after reading this report.
+Keep answers to 2-3 sentences max. Use plain language.
+Examples: "How much should I spend on ads?", "Will ads actually bring me calls?", "How quickly can I start?", "What happens if I pause ads?", "Is this worth it for my business?"
+
+---
+
 ## STYLE RULES
 
 - Be specific — reference actual competitor names, keywords, and CPC figures from the report
 - Be direct — no generic PPC advice, only bail bonds-specific strategy
 - Mobile-first mindset — most bail bonds searches happen on phones at night
-- Format all output as clean markdown suitable for a Google Doc
+- Write like you are explaining to a smart person who has NEVER run Google Ads before — avoid all jargon, or explain it when you use it
+- Format output as clean HTML (use <h1>, <h2>, <h3>, <strong>, <ul><li>, <p> tags) — NOT markdown
 - End with one sentence: the single highest-ROI paid action to take today
