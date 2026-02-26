@@ -23,74 +23,84 @@ if (!getRes.ok) {
 console.log("✅ Fetched workflow:", workflow.name);
 console.log("   Current nodes:", workflow.nodes.map((n: any) => n.name));
 
-// Step 2: Replace the "Extract PDF URL" HTML Extract node with a Code node
-// that properly decodes the Gmail base64 payload
-const decodeAndExtractCode = `
-// Decode the Gmail payload to get the full HTML body
-function decodeBase64Url(data) {
-  const base64 = data.replace(/-/g, '+').replace(/_/g, '/');
-  const padded = base64.padEnd(base64.length + (4 - base64.length % 4) % 4, '=');
-  return Buffer.from(padded, 'base64').toString('utf-8');
-}
-
-let htmlBody = '';
-
-// Try simple body first
-if ($json.payload?.body?.data) {
-  htmlBody = decodeBase64Url($json.payload.body.data);
-}
-
-// Try multipart (most Gmail emails are multipart)
-if (!htmlBody && $json.payload?.parts) {
-  const findHtml = (parts) => {
-    for (const part of parts) {
-      if (part.mimeType === 'text/html' && part.body?.data) {
-        return decodeBase64Url(part.body.data);
-      }
-      if (part.parts) {
-        const found = findHtml(part.parts);
-        if (found) return found;
-      }
-    }
-    return '';
-  };
-  htmlBody = findHtml($json.payload.parts);
-}
-
-// Extract PDF/download URL — SpyFu report links
-const urlPatterns = [
-  /href="(https?:\/\/[^"]*spyfu[^"]*(?:pdf|download|report|export)[^"]*)"/i,
-  /href="(https?:\/\/reports?\\.spyfu\\.com\/[^"]*)"/i,
-  /href="(https?:\/\/app\\.spyfu\\.com\/[^"]*(?:download|export|pdf)[^"]*)"/i,
-  /href="(https?:\/\/[^"]*\\.pdf[^"]*)"/i,
-];
-
-let pdfUrl = '';
-for (const pattern of urlPatterns) {
-  const match = htmlBody.match(pattern);
-  if (match) {
-    pdfUrl = match[1];
-    break;
-  }
-}
-
-// Fallback: grab all hrefs and pick the most likely one
-if (!pdfUrl) {
-  const allHrefs = [...htmlBody.matchAll(/href="(https?:\/\/[^"]+)"/gi)].map(m => m[1]);
-  const candidate = allHrefs.find(u =>
-    u.includes('spyfu') || u.includes('download') || u.includes('.pdf')
-  );
-  if (candidate) pdfUrl = candidate;
-}
-
-const emailSubject = $json.Subject || $json.subject || '';
-
-return {
-  pdfUrl,
-  emailSubject,
-  htmlLength: htmlBody.length,
-};
-`;
+// Step 2: Build the Code node JavaScript as an array of line strings then join.
+//
+// LESSON — why this approach:
+//   The code must travel as: TypeScript string → JSON.stringify → n8n API → n8n JS engine.
+//   Each layer has its own escaping rules. Regex literals with " chars inside them
+//   cause "Unterminated group" errors because the quotes get double-escaped along the way.
+//
+//   Fix: write the generated JS using only single-quoted strings. When we need a literal
+//   double-quote character (e.g. to split on href="), we use String.fromCharCode(34)
+//   instead of writing the character itself — zero escaping problems, fully readable.
+const decodeAndExtractCode = [
+  "// String.fromCharCode(34) = double-quote character, used to avoid escaping issues",
+  "var DQ = String.fromCharCode(34);",
+  "",
+  "// Decode base64url (Gmail uses base64url, not standard base64)",
+  "// base64url swaps + with - and / with _ to make URLs safe.",
+  "// We reverse that, add padding if needed, then decode.",
+  "function decodeBase64Url(data) {",
+  "  var b64 = data.replace(/-/g, '+').replace(/_/g, '/');",
+  "  var rem = b64.length % 4;",
+  "  if (rem > 0) { b64 = b64 + '===='.slice(0, 4 - rem); }",
+  "  return Buffer.from(b64, 'base64').toString('utf-8');",
+  "}",
+  "",
+  "// Gmail multipart emails nest parts inside parts.",
+  "// This function walks the tree to find the HTML part.",
+  "function findHtmlPart(parts) {",
+  "  for (var i = 0; i < parts.length; i++) {",
+  "    var p = parts[i];",
+  "    if (p.mimeType === 'text/html' && p.body && p.body.data) {",
+  "      return decodeBase64Url(p.body.data);",
+  "    }",
+  "    if (p.parts) {",
+  "      var nested = findHtmlPart(p.parts);",
+  "      if (nested) return nested;",
+  "    }",
+  "  }",
+  "  return '';",
+  "}",
+  "",
+  "var htmlBody = '';",
+  "var payload = $json.payload || {};",
+  "",
+  "// Case 1: simple email — body data sits directly on payload.body",
+  "if (payload.body && payload.body.data) {",
+  "  htmlBody = decodeBase64Url(payload.body.data);",
+  "}",
+  "",
+  "// Case 2: multipart email — body is nested inside payload.parts",
+  "if (!htmlBody && payload.parts) {",
+  "  htmlBody = findHtmlPart(payload.parts);",
+  "}",
+  "",
+  "// Extract href URLs without regex.",
+  "// Split on 'href=\"' — every piece after a split starts with the URL.",
+  "// Then take everything up to the next double-quote to get the URL.",
+  "var pdfUrl = '';",
+  "var chunks = htmlBody.split('href=' + DQ);",
+  "for (var i = 1; i < chunks.length; i++) {",
+  "  var url = chunks[i].split(DQ)[0];",
+  "  var lower = url.toLowerCase();",
+  "  if (lower.indexOf('spyfu') !== -1 ||",
+  "      lower.indexOf('download') !== -1 ||",
+  "      lower.slice(-4) === '.pdf') {",
+  "    pdfUrl = url;",
+  "    break;",
+  "  }",
+  "}",
+  "",
+  "var emailSubject = $json.Subject || $json.subject || '';",
+  "",
+  "return {",
+  "  pdfUrl: pdfUrl,",
+  "  emailSubject: emailSubject,",
+  "  htmlLength: htmlBody.length,",
+  "  payloadKeys: Object.keys(payload).join(', ')",
+  "};",
+].join("\n");
 
 // Step 3: Find and replace the Extract PDF URL node
 const nodeIndex = workflow.nodes.findIndex((n: any) => n.name === "Extract PDF URL");
