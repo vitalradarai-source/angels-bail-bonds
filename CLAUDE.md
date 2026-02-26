@@ -24,6 +24,7 @@ task tracking, and AI-powered operations for Angel's Bail Bonds.
 | n8n           | N8N_BASE_URL        | Connected |
 | Anthropic     | ANTHROPIC_API_KEY   | Connected |
 | ClickUp       | CLICKUP_API_KEY     | Connected |
+| SERP API      | SERP_API_KEY        | Connected |
 
 - n8n instance: https://n8n.srv1329589.hstgr.cloud
 - Trigger.dev project ID: proj_ylumvpynnyjymaslqmhw (prod key)
@@ -65,4 +66,4 @@ angels-bail-bonds/
 - 2026-02-26: Connected APIs — Trigger.dev, n8n, Anthropic/Claude, ClickUp
 - 2026-02-26: Built n8n MCP server (6 tools) — registered with Claude Code
 - 2026-02-26: Built ClickUp MCP server (9 tools) — registered with Claude Code
-- **Next:** Restart Claude Code to activate both MCP servers, then continue adding APIs
+- 2026-02-26: Added SERP API key to .env
