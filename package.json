@@ -2,7 +2,8 @@
   "type": "module",
   "scripts": {
     "mcp:n8n": "tsx src/mcp/n8n-server.ts",
-    "mcp:clickup": "tsx src/mcp/clickup-server.ts"
+    "mcp:clickup": "tsx src/mcp/clickup-server.ts",
+    "mcp:canva": "tsx src/mcp/canva-server.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",

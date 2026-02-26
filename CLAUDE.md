@@ -40,6 +40,10 @@ Tools: list_workflows, get_workflow, set_workflow_active, list_executions, get_e
 ### ClickUp MCP (`src/mcp/clickup-server.ts`)
 Tools: list_spaces, list_folders, list_lists, list_tasks, get_task, create_task, update_task, search_tasks, add_comment
 
+### Canva MCP (`src/mcp/canva-server.ts`)
+Tools: canva_get_auth_url, canva_exchange_code, canva_get_user, canva_list_designs, canva_get_design, canva_create_design, canva_export_design, canva_list_assets, canva_get_asset
+Note: OAuth flow required on first use — run canva_get_auth_url then canva_exchange_code
+
 ## Key Files & Structure
 ```
 angels-bail-bonds/
@@ -71,3 +75,4 @@ angels-bail-bonds/
 - 2026-02-26: Added SERP API key to .env
 - 2026-02-26: Anthropic model locked to Haiku (ANTHROPIC_MODEL=claude-haiku-4-5-20251001)
 - 2026-02-26: Added Canva Apps SDK (App ID) + Connect API (Client ID + Secret) to .env
+- 2026-02-26: Built Canva MCP server (9 tools) — registered with Claude Code
