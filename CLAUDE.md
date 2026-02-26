@@ -22,7 +22,7 @@ task tracking, and AI-powered operations for Angel's Bail Bonds.
 | Trigger.dev   | TRIGGER_SECRET_KEY  | Connected |
 | n8n           | N8N_API_KEY         | Connected |
 | n8n           | N8N_BASE_URL        | Connected |
-| Anthropic     | ANTHROPIC_API_KEY   | Connected |
+| Anthropic     | ANTHROPIC_API_KEY   | Connected — Haiku only (`claude-haiku-4-5-20251001`) |
 | ClickUp       | CLICKUP_API_KEY     | Connected |
 | SERP API      | SERP_API_KEY        | Connected |
 
@@ -67,3 +67,4 @@ angels-bail-bonds/
 - 2026-02-26: Built n8n MCP server (6 tools) — registered with Claude Code
 - 2026-02-26: Built ClickUp MCP server (9 tools) — registered with Claude Code
 - 2026-02-26: Added SERP API key to .env
+- 2026-02-26: Anthropic model locked to Haiku (ANTHROPIC_MODEL=claude-haiku-4-5-20251001)
