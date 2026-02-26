@@ -6,8 +6,9 @@ import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, "../../.env") });
 
-const N8N_BASE_URL = process.env.N8N_BASE_URL!;
-const N8N_API_KEY  = process.env.N8N_API_KEY!;
+const N8N_BASE_URL     = process.env.N8N_BASE_URL!;
+const N8N_API_KEY      = process.env.N8N_API_KEY!;
+const ANTHROPIC_MODEL  = process.env.ANTHROPIC_MODEL || "claude-opus-4-6";
 
 // ── LOAD COMPARISON PROMPT ────────────────────────────────────────────────────
 const comparisonPrompt = fs.readFileSync(
@@ -367,7 +368,7 @@ return {
         contentType: "raw",
         rawContentType: "application/json",
         body: `={{ JSON.stringify({
-  "model": "claude-sonnet-4-6",
+  "model": "${ANTHROPIC_MODEL}",
   "max_tokens": 8192,
   "messages": [
     {
