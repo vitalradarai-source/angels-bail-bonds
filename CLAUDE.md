@@ -78,3 +78,5 @@ angels-bail-bonds/
 - 2026-02-26: Added Canva Apps SDK (App ID) + Connect API (Client ID + Secret) to .env
 - 2026-02-26: Built Canva MCP server (9 tools) — registered with Claude Code
 - 2026-02-26: Added SerpRobot API (rank tracking, 10 paid credits — use manually only)
+- 2026-02-26: Built SpyFu Report Analyzer workflow in n8n (ID: 9Xw3q2PtO1LPC4JH)
+- 2026-02-26: Master prompts created for SEO + PPC analysis (src/prompts/)
