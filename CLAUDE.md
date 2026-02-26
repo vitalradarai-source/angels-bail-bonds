@@ -25,6 +25,7 @@ task tracking, and AI-powered operations for Angel's Bail Bonds.
 | Anthropic     | ANTHROPIC_API_KEY   | Connected — Haiku only (`claude-haiku-4-5-20251001`) |
 | ClickUp       | CLICKUP_API_KEY     | Connected |
 | SERP API      | SERP_API_KEY        | Connected |
+| Canva         | CANVA_APP_ID, CANVA_APP_ORIGIN | Connected — Client Secret pending (check Authentication tab) |
 
 - n8n instance: https://n8n.srv1329589.hstgr.cloud
 - Trigger.dev project ID: proj_ylumvpynnyjymaslqmhw (prod key)
@@ -68,3 +69,4 @@ angels-bail-bonds/
 - 2026-02-26: Built ClickUp MCP server (9 tools) — registered with Claude Code
 - 2026-02-26: Added SERP API key to .env
 - 2026-02-26: Anthropic model locked to Haiku (ANTHROPIC_MODEL=claude-haiku-4-5-20251001)
+- 2026-02-26: Added Canva App ID + origin to .env — Client Secret pending
