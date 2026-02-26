@@ -22,7 +22,7 @@ task tracking, and AI-powered operations for Angel's Bail Bonds.
 | Trigger.dev   | TRIGGER_SECRET_KEY  | Connected |
 | n8n           | N8N_API_KEY         | Connected |
 | n8n           | N8N_BASE_URL        | Connected |
-| Anthropic     | ANTHROPIC_API_KEY   | Connected — Haiku only (`claude-haiku-4-5-20251001`) |
+| Anthropic     | ANTHROPIC_API_KEY   | Connected — SpyFu workflow uses `claude-sonnet-4-6` (max_tokens: 8192) |
 | ClickUp       | CLICKUP_API_KEY     | Connected |
 | SerpAPI       | SERP_API_KEY        | Connected — use for workflow research |
 | SerpRobot     | SERPROBOT_API_KEY   | Connected — ⚠️ 10 paid credits only, free endpoints safe |
@@ -74,7 +74,7 @@ angels-bail-bonds/
 - 2026-02-26: Built n8n MCP server (6 tools) — registered with Claude Code
 - 2026-02-26: Built ClickUp MCP server (9 tools) — registered with Claude Code
 - 2026-02-26: Added SERP API key to .env
-- 2026-02-26: Anthropic model locked to Haiku (ANTHROPIC_MODEL=claude-haiku-4-5-20251001)
+- 2026-02-26: Anthropic model switched to claude-sonnet-4-6 with max_tokens 8192 (was Haiku/4096 — reports were cut off)
 - 2026-02-26: Added Canva Apps SDK (App ID) + Connect API (Client ID + Secret) to .env
 - 2026-02-26: Built Canva MCP server (9 tools) — registered with Claude Code
 - 2026-02-26: Added SerpRobot API (rank tracking, 10 paid credits — use manually only)
