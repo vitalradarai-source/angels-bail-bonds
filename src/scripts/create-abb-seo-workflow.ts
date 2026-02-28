@@ -1,280 +1,240 @@
 /**
  * Angels Bail Bonds — SEO Content Generator Workflow
  *
- * Creates an n8n workflow that:
- *  1. Reads keywords from ABB Google Sheets (Keyword Inventory + SERPROBOT rankings)
- *  2. Fetches related keyword suggestions from DataForSEO
- *  3. Scores keywords using volume, KD, and SERPROBOT rank opportunities
- *  4. Generates YMYL / EEAT-quality bail bonds blog content via Claude
- *  5. Saves each article as a Google Doc for review + logs status back to Google Sheets
+ * Reads keywords directly from ABB Google Sheets (no DataForSEO expansion).
+ * Uses SerpAPI for SERP research, Claude API for all AI content generation.
+ * Outputs articles as Google Docs + logs status back to Sheet3.
  *
- * Site: https://bailbondsdomesticviolence.com (Lovable.dev / React — NOT WordPress)
+ * Site: https://bailbondsdomesticviolence.com (Lovable.dev / React)
  *
- * Google Sheets used:
- *  - Sheet1 (Keywords used in drafts):  1I3YIGuO13tc8ElRhZyQHmgj04m3NVBkmvC_iouM3XHo
- *  - Sheet3 (Keyword Inventory):        139W8Bw6F9-ujDi3eEFw77RzMZYd6fQEO7kUZbLshNYA
- *  - Sheet4 (Keyword bank / SERPROBOT): 1qsR83Vg7R-yatxuQGAwlzCamWdImbY5sl3Jd6107fHs
+ * Google Sheets:
+ *  - Sheet3 Keyword Inventory: 139W8Bw6F9-ujDi3eEFw77RzMZYd6fQEO7kUZbLshNYA
+ *  - Sheet4 Keyword Bank (SERPROBOT): 1qsR83Vg7R-yatxuQGAwlzCamWdImbY5sl3Jd6107fHs
  */
 
 import dotenv from 'dotenv';
-import { readFileSync } from 'fs';
-
 dotenv.config();
 
 const N8N_BASE_URL = process.env.N8N_BASE_URL!;
 const N8N_API_KEY  = process.env.N8N_API_KEY!;
 
-// ── Sheet IDs ──────────────────────────────────────────────────────────────
-const SHEET_DRAFTS_CHECKLIST = '1I3YIGuO13tc8ElRhZyQHmgj04m3NVBkmvC_iouM3XHo';
 const SHEET_KEYWORD_INVENTORY = '139W8Bw6F9-ujDi3eEFw77RzMZYd6fQEO7kUZbLshNYA';
 const SHEET_KEYWORD_BANK      = '1qsR83Vg7R-yatxuQGAwlzCamWdImbY5sl3Jd6107fHs';
+const SITE_URL                = 'https://bailbondsdomesticviolence.com';
+const GDRIVE_FOLDER_ID        = ''; // Optional: paste Drive folder ID here
 
-// ── Site ───────────────────────────────────────────────────────────────────
-// Lovable.dev (React) site — content saved to Google Docs, NOT WordPress
-const SITE_URL = 'https://bailbondsdomesticviolence.com';
-
-// Google Drive folder ID to save articles into (optional — leave empty to use root)
-// Create a "SEO Articles" folder in Drive and paste its ID here
-const GDRIVE_FOLDER_ID = '';
-
-// ── Helpers ────────────────────────────────────────────────────────────────
 async function n8nPost(path: string, body: object) {
   const res = await fetch(`${N8N_BASE_URL}/api/v1${path}`, {
     method: 'POST',
     headers: { 'X-N8N-API-KEY': N8N_API_KEY, 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`n8n ${path} → ${res.status}: ${text.slice(0, 400)}`);
-  }
+  if (!res.ok) throw new Error(`n8n ${path} → ${res.status}: ${(await res.text()).slice(0, 400)}`);
   return res.json();
 }
 
-// ── Bail Bonds System Prompts ──────────────────────────────────────────────
+// ── Prompts ────────────────────────────────────────────────────────────────
 
-const PROMPT_TOC_SYSTEM = `You are an SEO content strategist specializing in bail bonds and legal services — a YMYL (Your Money or Your Life) niche requiring high E-E-A-T signals.
+const P_TOC_SYS = `You are an SEO content strategist specializing in bail bonds — a YMYL niche requiring high E-E-A-T.
 
-Your task is to create a clear, SEO-friendly table of contents for a bail bonds blog article based on a target keyword.
+Your task: create a focused, SEO-friendly table of contents for a bail bonds blog article.
 
-Guidelines:
-- Structure content for stressed families or individuals who urgently need bail bond information
-- Prioritize practical, actionable sections (e.g. "How to get a bail bond in under 2 hours", "What documents you need")
-- Always include a local element when the keyword is location-specific (e.g. City of Industry, Hermosa Beach)
-- Include sections that build trust and authority: licensing, years in service, 24/7 availability
-- Include a FAQ section if appropriate — matches PAA (People Also Ask) search intent
-- 4–6 sections total, no overlap
-- Use clear, natural H2 headings that match search intent
-- Avoid fluff sections; every section must deliver value to someone in a bail emergency`;
+Rules:
+- Write for stressed families urgently searching for help in California
+- 4–6 sections, no overlap, no fluff
+- Always include: a local angle (when keyword is city-specific), a trust/licensing section, a FAQ
+- Every section must deliver actionable value to someone in a bail emergency
+- Use natural H2 headings that match search intent
+- Return a JSON object: { "blogSections": [{ "title": "...", "description": "..." }] }`;
 
-const PROMPT_TOC_USER = `Create a table of contents for a bail bonds blog article targeting:
+const P_TOC_USER = `Create a table of contents for a bail bonds blog article.
 
-Primary keyword: {{ $json["Suggested Keyword"] }}
-Seed keyword: {{ $json["Keyword"] }}
-Search volume: {{ $json["Search Volume"] }}
-Competition level: {{ $json["Competition"] }}
-SERPROBOT current rank: {{ $json["serprobot_rank"] }}
+Primary keyword: {{ $json.Keyword }}
+Monthly search volume: {{ $json.Volume }}
+Keyword difficulty: {{ $json.KD }}
+Current SERPROBOT rank: {{ $json.serprobot_rank || 'Not tracked' }}
+SERP context from research:
+{{ $json.serp_context }}
 
-Requirements:
-- 4–6 sections, no duplicates
-- Align with emergency / local service search intent
-- Structure must support a comprehensive, trustworthy article about bail bonds in California
-- Return as a JSON array: { "blogSections": [{ "title": "...", "description": "..." }, ...] }`;
+Return JSON: { "blogSections": [{ "title": "...", "description": "2-3 sentence brief" }] }`;
 
-const PROMPT_CONTENT_SYSTEM = `You are an expert bail bonds content writer producing YMYL content for Angels Bail Bonds — a licensed, family-owned California bail bond agency serving communities since 1958.
+const P_CONTENT_SYS = `You are an expert bail bonds content writer for Angels Bail Bonds — a licensed, family-owned California bail bond agency serving communities since 1958.
 
-Your content must meet Google's E-E-A-T standards:
-- **Experience**: Write as if from a licensed bail agent who has handled thousands of cases
-- **Expertise**: Cite California bail laws (Penal Code §§ 1268–1306), industry regulations, and accurate bail bond fee structures (typically 10% non-refundable premium)
-- **Authoritativeness**: Reference credible sources (CA Courts, CDOI, DBO, county sheriff departments)
-- **Trustworthiness**: Be transparent about costs, timelines, and what clients should expect
+E-E-A-T requirements:
+- Experience: Write as a licensed bail agent who has handled thousands of cases
+- Expertise: Reference CA Penal Code §§ 1268–1306, 10% non-refundable premium (set by CA law), CDOI licensing
+- Authority: Cite CA Courts (courts.ca.gov), CA Dept of Insurance (insurance.ca.gov), county sheriff departments
+- Trust: 24/7 availability, licensed, family-owned, fast release times
 
 Content rules:
-- Address the urgent, emotional state of the reader — they are scared and need clear guidance
-- Always mention: 24/7 availability, licensed bail agent, fast release times
-- Local SEO: use location-specific details (sheriff station addresses, court information) when available
-- Avoid keyword stuffing; write naturally for humans first
-- Include at least one inline link per section (to authoritative sources)
-- Format in clean HTML with proper H2/H3/P tags`;
+- Address the urgent emotional state of the reader — they are scared and need clear guidance
+- Local SEO: use location-specific details (sheriff station, court info) when available
+- Format: clean HTML — h2, h3, p, ul, a tags. Min one inline link per section
+- 200–400 words per section`;
 
-const PROMPT_CONTENT_USER = `Write the content for this bail bonds blog article section:
+const P_CONTENT_USER = `Write the content for this bail bonds article section.
 
 Section Title: {{ $json.title }}
 Section Description: {{ $json.description }}
+Primary keyword: {{ $('Loop Over Items').item.json.Keyword }}`;
 
-Requirements:
-- 200–350 words for standard sections; 400–500 for core "how it works" sections
-- Include accurate bail bond facts (10% premium, CA law references where applicable)
-- Write for someone urgently searching for bail bond help in California
-- End each section with a subtle call-to-action or trust signal
-- Cite at least one authoritative source (CA courts, CDOI, sheriff dept, etc.)`;
+const P_EDITOR_SYS = `You are an expert bail bonds content editor at Angels Bail Bonds.
 
-const PROMPT_EDITOR_SYSTEM = `You are an expert bail bonds content editor at Angels Bail Bonds.
+Given section titles + content blocks, assemble a polished HTML article:
+- Add a compelling 2–3 sentence intro (urgency + trust signal) before the first section
+- Wrap each section in proper H2 + paragraphs
+- Ensure smooth transitions, inline links in every section
+- Target: 1,200–1,800 words total
+- Tone: urgent yet reassuring, professional, compassionate
+- Output clean HTML only — no markdown, no commentary`;
 
-You receive a list of section titles and content blocks. Your job is to assemble them into a polished, publication-ready HTML blog article.
+const P_EEAT_SYS = `You are an E-E-A-T enhancement specialist for YMYL bail bonds content.
 
-Rules:
-- Wrap each section in proper H2 headings + paragraphs
-- Add a compelling intro paragraph before the first section (2–3 sentences, urgency + trust)
-- Add at least one inline hyperlink per section (to a cited source)
-- Ensure smooth transitions between sections
-- Keep the tone: urgent yet reassuring, professional, compassionate
-- Final word count target: 1,200–1,800 words
-- Output clean HTML only (no markdown, no commentary)`;
+Given a draft article, produce four clearly labeled blocks:
 
-const PROMPT_EEAT_SYSTEM = `You are an E-E-A-T enhancement specialist for bail bonds content — a YMYL niche with strict quality standards.
+FROM_EXPERIENCE:
+Write 3–5 sentences from a licensed California bail agent with 20+ years experience. Personal, authentic, empathetic to families in crisis.
 
-Given a draft bail bonds article, you will:
+SOURCES:
+List all sources cited in the article, plus add:
+- https://www.insurance.ca.gov/ (CA Dept of Insurance — bail agent licensing)
+- https://www.courts.ca.gov/ (CA Courts — bail procedures)
+- https://leginfo.legislature.ca.gov/ (CA Penal Code bail sections)
 
-1. **"From Experience" Block**: Write 3–5 sentences from the perspective of a licensed California bail agent with 20+ years of experience. Make it personal, authentic, and empathetic to families in crisis.
+AUTHOR_FOOTER:
+"Angel Ferrer — Licensed California Bail Agent | Angels Bail Bonds | CA DOI License #[INSERT] | Serving communities since 1958 | 24/7: [INSERT PHONE]"
 
-2. **Sources List**: Extract and list all sources cited in the article. Add 2–3 additional high-authority sources:
-   - CA Department of Insurance: https://www.insurance.ca.gov/
-   - CA Courts bail information: https://www.courts.ca.gov/
-   - CA Penal Code bail sections: https://leginfo.legislature.ca.gov/
+FACT_CHECK:
+Verify these are correct in the article:
+• Bail bond premium = 10% of full bail (non-refundable, CA law)
+• Bail agents licensed by CA Dept of Insurance
+• Angels Bail Bonds serving since 1958
+• 24/7 service
+Flag any errors.`;
 
-3. **Author Footer**: Create a bio for:
-   "Angel Ferrer — Licensed California Bail Agent | Angels Bail Bonds | CA DOI License #[license] | Serving communities since 1958 | Available 24/7: (xxx) xxx-xxxx"
-   Use placeholders for specific numbers the client should fill in.
+const P_EDITOR2_SYS = `You are the final editor for Angels Bail Bonds blog content.
 
-4. **Fact-Check Summary**: Verify these bail bonds facts are correctly stated in the article:
-   - Bail bond premium: 10% of the full bail amount (non-refundable, set by CA law)
-   - Bail bond agents are licensed by the CA Department of Insurance
-   - Angels Bail Bonds has been serving since 1958
-   - Service is available 24/7
-   Flag any errors or missing trust signals.
+Assemble the article + EEAT enhancements into one clean publication-ready HTML article:
+- FROM_EXPERIENCE block appears after the intro paragraph
+- All cited sources in <h2>Sources</h2> at the end
+- Author footer as <div class="author-bio"> at the very end
+- Semantic HTML throughout: h1 (title used externally), h2 (sections), p, ul, a
+- No labels, no commentary — clean HTML only`;
 
-Return clearly labeled sections: FROM_EXPERIENCE, SOURCES, AUTHOR_FOOTER, FACT_CHECK.`;
+const P_META_SYS = `You are an SEO metadata specialist for bail bonds content.
 
-const PROMPT_EDITOR2_SYSTEM = `You are the final editor for Angels Bail Bonds blog content.
+Given the article title and content, return clean JSON with:
+- slug: lowercase, dashes, no stop words, include location if present
+- metaTitle: max 60 chars, includes keyword + location or brand
+- metaDescription: max 160 chars, compelling, includes keyword + CTA
+- focusKeyword: single most important keyword
+- keywords: array of 5–8 keywords`;
 
-Assemble the article + EEAT enhancements into one clean, professional HTML article ready for WordPress:
-- "From Experience" block appears after the intro paragraph
-- All cited sources in a <h2>Sources</h2> section at the end
-- Author footer as an <aside> or <div class="author-bio"> at the very end
-- Clean semantic HTML: h1 (title), h2 (sections), h3 (subsections), p (paragraphs), ul/ol (lists), a (links)
-- No system prompt text, no labels, no commentary — just clean HTML
-- Preserve all inline links from the content editor`;
+const P_IMAGE_SYS = `You are a visual content specialist for a bail bonds agency.
 
-const PROMPT_META_SYSTEM = `You are an SEO metadata specialist for bail bonds content.
+Given the title and content excerpt, return JSON with:
+- imagePrompt: DALL-E prompt — professional, trustworthy, warm lighting. Subjects: courthouse at dawn, family outside jail, bail agent on phone, California skyline. NO handcuffs, mugshots, or prison bars.
+- altText: max 20 words, descriptive, includes keyword`;
 
-Given the blog title and content, generate:
-1. slug: SEO-friendly URL (lowercase, dashes, no stop words, include location if present)
-2. metaTitle: Max 60 characters — include primary keyword + "Angels Bail Bonds" or location
-3. metaDescription: Max 160 characters — compelling, includes keyword + call-to-action
-4. focusKeyword: The single most important keyword for this article
-5. keywords: 5–8 keywords array
+// ── Keyword scoring (no DataForSEO — uses sheet data directly) ────────────
+const SCORING_CODE = `// Score keywords from ABB Google Sheets
+// Fields available: Keyword, Volume, KD, serprobot_rank, serprobot_presence
 
-Output as clean JSON.`;
-
-const PROMPT_IMAGE_SYSTEM = `You are a visual content specialist for a bail bonds agency.
-
-Given the article title and content, generate:
-1. imagePrompt: Vivid DALL-E prompt — professional, trustworthy imagery.
-   Style: realistic photo-illustration, modern, warm lighting.
-   Subject ideas: courthouse exterior at dawn, family outside a jail, a trusted bail agent on the phone, California skyline with a courthouse.
-   Avoid: anything that looks criminal, mugshots, handcuffs, prison bars.
-2. altText: Max 20 words, descriptive, includes keyword.
-
-Output as JSON.`;
-
-// ── Scoring Code (replaces existing "Code in JavaScript") ─────────────────
-const SCORING_CODE = `// Angels Bail Bonds — Keyword Opportunity Scorer
-// Input: items with Suggested Keyword, Search Volume, CPC, Competition, serprobot_rank
-// Output: same items + score (higher = better content opportunity)
-
-function toNum(v) {
-  const n = Number(String(v ?? '').replace(',', '.'));
-  return Number.isFinite(n) ? n : 0;
-}
 function kdPenalty(kd) {
-  // KD 0-20 = easy, 21-40 = moderate, 41-60 = hard, 61+ = very hard
-  if (kd <= 20) return 1.0;
-  if (kd <= 40) return 0.7;
-  if (kd <= 60) return 0.45;
+  const n = Number(kd) || 0;
+  if (n <= 20) return 1.0;
+  if (n <= 40) return 0.7;
+  if (n <= 60) return 0.45;
   return 0.2;
 }
+
 function rankBonus(rank) {
-  // rank 0 = not tracked, 1-4 = already winning, 5-15 = opportunity, 16-30 = reachable, 31+ = long shot
-  if (!rank || rank === 0) return 0.8;  // not tracked — medium opportunity
-  if (rank >= 1 && rank <= 4)  return 0.1; // already ranking — low priority
-  if (rank >= 5 && rank <= 15) return 1.5; // near top — high opportunity
-  if (rank >= 16 && rank <= 30) return 1.2; // reachable
-  return 0.6; // too far back
-}
-function compWeight(comp) {
-  const c = String(comp ?? '').toUpperCase().trim();
-  if (c === 'LOW')    return 1.0;
-  if (c === 'MEDIUM') return 0.6;
-  if (c === 'HIGH')   return 0.25;
-  return 0.5;
+  const r = Number(rank) || 0;
+  if (r === 0)             return 0.8;  // not tracked — medium opportunity
+  if (r >= 1 && r <= 4)   return 0.1;  // already winning — skip
+  if (r >= 5 && r <= 15)  return 1.5;  // near top page — high priority
+  if (r >= 16 && r <= 30) return 1.2;  // reachable
+  return 0.6;
 }
 
-const items = $input.all();
-const scored = items.map(item => {
-  const vol  = toNum(item.json['Search Volume']);
-  const kd   = toNum(item.json['kd'] || 0);
-  const rank = toNum(item.json['serprobot_rank'] || 0);
-  const comp = item.json['Competition'] || '';
-  const score = vol * kdPenalty(kd) * rankBonus(rank) * compWeight(comp);
-  return { ...item, json: { ...item.json, score: Math.round(score) } };
-});
+return $input.all().map(item => {
+  const vol   = Number(item.json.Volume)          || 0;
+  const kd    = Number(item.json.KD)              || 0;
+  const rank  = Number(item.json.serprobot_rank)  || 0;
+  const score = Math.round(vol * kdPenalty(kd) * rankBonus(rank));
+  return { ...item, json: { ...item.json, score } };
+});`;
 
-return scored;`;
+// ── Keyword enrichment (merge Sheet3 + Sheet4) ────────────────────────────
+const ENRICH_CODE = `// Merge Keyword Inventory (Sheet3) with SERPROBOT Rankings (Sheet4)
+// Sheet3 rows have 'KD'; Sheet4 rows have 'Latest'
 
-// ── Enrichment Code (new node — merges Sheet3 keywords + Sheet4 SERPROBOT) ─
-const ENRICH_CODE = `// Merge Keyword Inventory (Sheet3) + SERPROBOT Rankings (Sheet4)
-// Input stream 1: Sheet3 rows (Keyword, Volume, KD, Presence in SERPROBOT List?)
-// Input stream 2: Sheet4 rows (Keyword, Latest rank, L-Vol, G-Vol)
+const all = $input.all();
+const inventory = all.filter(i => i.json['KD'] !== undefined && i.json['Keyword']);
+const rankings  = all.filter(i => i.json['Latest'] !== undefined);
 
-const inventoryItems = $input.all(); // All come through as a flat stream after Merge node
-
-// Separate by which stream they came from using a flag field
-// Sheet3 rows have 'KD' column; Sheet4 rows have 'Latest' column
-const inventory = inventoryItems.filter(i => i.json['KD'] !== undefined);
-const rankings  = inventoryItems.filter(i => i.json['Latest'] !== undefined);
-
-// Build a map of keyword → SERPROBOT rank
+// Build rank map: keyword → current rank number
 const rankMap = {};
 for (const r of rankings) {
-  const kw = String(r.json['Keyword'] || r.json[''] || '').toLowerCase().trim();
-  const latest = String(r.json['Latest'] || '').replace('★','').replace('↑','').trim();
-  const rank = Number(latest);
-  if (kw && Number.isFinite(rank)) rankMap[kw] = rank;
+  const kw     = String(r.json['Keyword'] || '').toLowerCase().trim();
+  const latest = String(r.json['Latest'] || '').replace(/[★↑↓]/g, '').trim();
+  const rank   = Number(latest);
+  if (kw && Number.isFinite(rank) && rank > 0) rankMap[kw] = rank;
 }
 
-// Enrich inventory keywords with SERPROBOT rank
-const enriched = inventory.map(item => {
-  const kw = String(item.json['Keyword'] || '').toLowerCase().trim();
-  const serproRank = rankMap[kw] ?? 0;
-  const vol = Number(item.json['Volume']) || 0;
-  const kd  = Number(item.json['KD']) || 0;
+// Enrich inventory keywords; filter out keywords already ranking #1-4
+const enriched = inventory
+  .map(item => {
+    const kw   = String(item.json['Keyword'] || '').toLowerCase().trim();
+    const rank = rankMap[kw] ?? 0;
+    if (rank >= 1 && rank <= 4) return null; // already optimised
+    return {
+      json: {
+        Keyword:             item.json['Keyword'],
+        Volume:              Number(item.json['Volume']) || 0,
+        KD:                  Number(item.json['KD'])     || 0,
+        serprobot_rank:      rank,
+        serprobot_presence:  item.json['Presence in SERPROBOT List?'] || 'Not present',
+      }
+    };
+  })
+  .filter(Boolean);
 
-  // Skip if already ranking #1-4 (already optimized)
-  if (serproRank >= 1 && serproRank <= 4) return null;
+return enriched.length > 0 ? enriched : inventory.map(i => ({
+  json: { ...i.json, serprobot_rank: 0, serprobot_presence: 'Not present' }
+}));`;
 
-  return {
-    json: {
-      Keyword: item.json['Keyword'],
-      Volume: vol,
-      KD: kd,
-      serprobot_rank: serproRank,
-      serprobot_presence: item.json['Presence in SERPROBOT List?'] || 'Not present',
-    }
-  };
-}).filter(Boolean);
+// ── SerpAPI context extraction ─────────────────────────────────────────────
+const SERP_EXTRACT_CODE = `// Extract useful SERP context from SerpAPI response to pass to Claude
+const data = $json;
 
-return enriched.length > 0 ? enriched : inventory.map(i => ({ json: { ...i.json, serprobot_rank: 0 } }));`;
+const organic = (data.organic_results || []).slice(0, 5).map(r => ({
+  title: r.title,
+  snippet: r.snippet,
+  link: r.link,
+}));
 
-// ── Build Workflow JSON ────────────────────────────────────────────────────
+const paa = (data.related_questions || []).slice(0, 5).map(q => q.question);
+
+const related = (data.related_searches || []).slice(0, 5).map(s => s.query);
+
+const context = [
+  organic.length ? 'TOP RESULTS:\\n' + organic.map(r => \`- \${r.title}: \${r.snippet}\`).join('\\n') : '',
+  paa.length    ? '\\nPEOPLE ALSO ASK:\\n' + paa.map(q => \`- \${q}\`).join('\\n')                    : '',
+  related.length? '\\nRELATED SEARCHES:\\n' + related.map(s => \`- \${s}\`).join('\\n')                : '',
+].filter(Boolean).join('\\n');
+
+return [{ json: { ...item.json, serp_context: context || 'No SERP data available' } }];`;
+
+// ── Build Workflow ─────────────────────────────────────────────────────────
 function buildWorkflow() {
   const nodes: any[] = [];
   const connections: Record<string, any> = {};
 
-  function conn(from: string, to: string, fromIdx = 0, toIdx = 0) {
+  function conn(from: string, to: string, fromPort = 0, toPort = 0) {
     if (!connections[from]) connections[from] = { main: [] };
-    while (connections[from].main.length <= fromIdx) connections[from].main.push([]);
-    connections[from].main[fromIdx].push({ node: to, type: 'main', index: toIdx });
+    while (connections[from].main.length <= fromPort) connections[from].main.push([]);
+    connections[from].main[fromPort].push({ node: to, type: 'main', index: toPort });
   }
   function aiConn(model: string, agent: string) {
     if (!connections[model]) connections[model] = { ai_languageModel: [[]] };
@@ -289,26 +249,60 @@ function buildWorkflow() {
     connections[parser].ai_outputParser[0].push({ node: agent, type: 'ai_outputParser', index: 0 });
   }
 
-  // ── Claude model factory ─────────────────────────────────────────────────
-  let modelIdx = 0;
-  function claudeModel(x: number, y: number): string {
-    const name = `Claude claude-opus-4-6 ${++modelIdx > 1 ? modelIdx : ''}`.trim();
+  // Claude model factory — native Anthropic node
+  let mIdx = 0;
+  function claudeNode(x: number, y: number, label?: string): string {
+    const name = label || `Claude Model ${++mIdx}`;
     nodes.push({
-      id: `model-${modelIdx}`,
+      id: `claude-${mIdx}`,
       name,
-      type: '@n8n/n8n-nodes-langchain.lmChatOpenRouter',
-      typeVersion: 1,
+      type: '@n8n/n8n-nodes-langchain.lmChatAnthropic',
+      typeVersion: 1.3,
       position: [x, y],
-      parameters: { model: 'anthropic/claude-opus-4-6', options: {} },
+      parameters: {
+        model: 'claude-opus-4-6',
+        options: { maxTokens: 8192 },
+      },
+      // credentials connected in n8n UI
     });
     return name;
   }
 
-  // ── Row 1: Trigger + Keyword Pipeline (y=0..200) ──────────────────────────
+  // SerpAPI tool factory — used as AI tool by agents
+  function serpTool(x: number, y: number, label: string): string {
+    nodes.push({
+      id: `serp-${label.replace(/\s/g, '-').toLowerCase()}`,
+      name: label,
+      type: '@n8n/n8n-nodes-langchain.toolHttpRequest',
+      typeVersion: 1.1,
+      position: [x, y],
+      parameters: {
+        url: 'https://serpapi.com/search.json',
+        sendQuery: true,
+        parametersUi: {
+          parameter: [
+            {
+              name: 'q',
+              value: "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('query', 'The search query to look up on Google', 'string') }}",
+            },
+            { name: 'api_key', value: '={{ $env.SERP_API_KEY }}' },
+            { name: 'num',     value: '10' },
+            { name: 'gl',      value: 'us' },
+            { name: 'hl',      value: 'en' },
+          ],
+        },
+        options: {
+          response: { response: { responseFormat: 'json' } },
+        },
+      },
+    });
+    return label;
+  }
 
-  // Schedule Trigger
+  // ── Row 1: Triggers + Keyword Pipeline (y=80) ────────────────────────────
+
   nodes.push({
-    id: 'schedule-trigger',
+    id: 'trigger-schedule',
     name: 'Schedule Trigger',
     type: 'n8n-nodes-base.scheduleTrigger',
     typeVersion: 1.2,
@@ -316,9 +310,8 @@ function buildWorkflow() {
     parameters: { rule: { interval: [{ field: 'weeks', weeksInterval: 1 }] } },
   });
 
-  // Manual Trigger (for testing)
   nodes.push({
-    id: 'manual-trigger',
+    id: 'trigger-manual',
     name: 'Manual Trigger',
     type: 'n8n-nodes-base.manualTrigger',
     typeVersion: 1,
@@ -326,7 +319,7 @@ function buildWorkflow() {
     parameters: {},
   });
 
-  // Google Sheets — ABB Keyword Inventory (Sheet3, City of Industry tab)
+  // Read Sheet3 — Keyword Inventory (City of Industry tab)
   nodes.push({
     id: 'gs-keywords',
     name: 'ABB Keyword Inventory',
@@ -334,16 +327,13 @@ function buildWorkflow() {
     typeVersion: 4.5,
     position: [-560, 80],
     parameters: {
-      documentId: {
-        __rl: true, value: SHEET_KEYWORD_INVENTORY,
-        mode: 'id',
-      },
-      sheetName: { __rl: true, value: 'City of Industry', mode: 'name' },
+      documentId: { __rl: true, value: SHEET_KEYWORD_INVENTORY, mode: 'id' },
+      sheetName:  { __rl: true, value: 'City of Industry', mode: 'name' },
       options: {},
     },
   });
 
-  // Google Sheets — SERPROBOT Rankings (Sheet4, clean list)
+  // Read Sheet4 — SERPROBOT Rankings
   nodes.push({
     id: 'gs-rankings',
     name: 'SERPROBOT Rankings',
@@ -352,14 +342,14 @@ function buildWorkflow() {
     position: [-560, 240],
     parameters: {
       documentId: { __rl: true, value: SHEET_KEYWORD_BANK, mode: 'id' },
-      sheetName: { __rl: true, value: 'clean list- SERPROBOT', mode: 'name' },
+      sheetName:  { __rl: true, value: 'clean list- SERPROBOT', mode: 'name' },
       options: {},
     },
   });
 
-  // Merge — combine both sheets
+  // Merge both sheet reads
   nodes.push({
-    id: 'merge-inputs',
+    id: 'merge-sources',
     name: 'Merge Keyword Sources',
     type: 'n8n-nodes-base.merge',
     typeVersion: 3,
@@ -367,141 +357,94 @@ function buildWorkflow() {
     parameters: { mode: 'combine', combineBy: 'combineAll', options: {} },
   });
 
-  // Code — Enrich & score keyword data
+  // Enrich: cross-reference Sheet3 + Sheet4, filter already-ranked #1-4
   nodes.push({
-    id: 'enrich-keywords',
+    id: 'enrich',
     name: 'Enrich Keywords',
     type: 'n8n-nodes-base.code',
     typeVersion: 2,
-    position: [-80, 160],
+    position: [-60, 160],
     parameters: { jsCode: ENRICH_CODE },
   });
 
-  // HTTP Request — DataForSEO keyword suggestions
+  // Score keywords using volume × KD penalty × rank bonus
   nodes.push({
-    id: 'dataforseo',
-    name: 'HTTP Keyword Suggestions',
-    type: 'n8n-nodes-base.httpRequest',
-    typeVersion: 4.2,
-    position: [180, 160],
-    parameters: {
-      method: 'POST',
-      url: 'https://api.dataforseo.com/v3/keywords_data/google_ads/keywords_for_keywords/live',
-      authentication: 'genericCredentialType',
-      genericAuthType: 'httpBasicAuth',
-      sendBody: true,
-      specifyBody: 'json',
-      jsonBody: '=[{\n  "location_name": "United States",\n  "language_code": "en",\n  "keywords": ["{{ $json.Keyword }}"]\n}]\n',
-      options: {},
-    },
-  });
-
-  // Code — Extract DataForSEO suggestions
-  nodes.push({
-    id: 'extract-suggestions',
-    name: 'Extract Suggestions',
-    type: 'n8n-nodes-base.code',
-    typeVersion: 2,
-    position: [420, 160],
-    parameters: {
-      jsCode: `const tasks = $json.tasks;
-const output = [];
-if (tasks?.[0]?.result) {
-  const keyword = tasks[0].data?.keywords?.[0] || $json.Keyword || '';
-  const rank    = $json.serprobot_rank ?? 0;
-  for (const sug of tasks[0].result) {
-    output.push({
-      Keyword:              keyword,
-      'Suggested Keyword':  sug.keyword,
-      'Search Volume':      sug.search_volume || 0,
-      CPC:                  sug.cpc || 0,
-      Competition:          sug.competition_level || sug.competition || 'MEDIUM',
-      kd:                   $json.KD || 0,
-      serprobot_rank:       rank,
-    });
-  }
-}
-return output.length > 0 ? output : [{ Keyword: $json.Keyword, 'Suggested Keyword': $json.Keyword, 'Search Volume': $json.Volume || 0, CPC: 0, Competition: 'MEDIUM', kd: $json.KD || 0, serprobot_rank: $json.serprobot_rank || 0 }];`,
-    },
-  });
-
-  // Google Sheets — Write keyword suggestions to ABB Sheet3 "Content Pipeline" tab
-  nodes.push({
-    id: 'gs-suggestions',
-    name: 'Log Keyword Suggestions',
-    type: 'n8n-nodes-base.googleSheets',
-    typeVersion: 4.5,
-    position: [660, 160],
-    parameters: {
-      operation: 'append',
-      documentId: { __rl: true, value: SHEET_KEYWORD_INVENTORY, mode: 'id' },
-      sheetName: { __rl: true, value: 'Content Pipeline', mode: 'name' },
-      columns: {
-        mappingMode: 'defineBelow',
-        value: {
-          Keyword:             "={{ $json.Keyword }}",
-          'Suggested Keyword': "={{ $json['Suggested Keyword'] }}",
-          'Search Volume':     "={{ $json['Search Volume'] }}",
-          CPC:                 "={{ $json['CPC'] }}",
-          Competition:         "={{ $json['Competition'] }}",
-          'SERPROBOT Rank':    "={{ $json['serprobot_rank'] }}",
-        },
-      },
-      options: {},
-    },
-  });
-
-  // Code — Score keywords (enriched scoring logic)
-  nodes.push({
-    id: 'score-keywords',
+    id: 'score',
     name: 'Score Keywords',
     type: 'n8n-nodes-base.code',
     typeVersion: 2,
-    position: [900, 160],
+    position: [180, 160],
     parameters: { jsCode: SCORING_CODE },
   });
 
-  // Sort
   nodes.push({
     id: 'sort',
     name: 'Sort by Score',
     type: 'n8n-nodes-base.sort',
     typeVersion: 1,
-    position: [1120, 160],
+    position: [400, 160],
     parameters: { sortFieldsUi: { sortField: [{ fieldName: 'score', order: 'descending' }] }, options: {} },
   });
 
-  // Limit to top 3
   nodes.push({
     id: 'limit',
     name: 'Top 3 Keywords',
     type: 'n8n-nodes-base.limit',
     typeVersion: 1,
-    position: [1340, 160],
+    position: [620, 160],
     parameters: { maxItems: 3 },
   });
 
-  // Loop Over Items
   nodes.push({
     id: 'loop',
     name: 'Loop Over Items',
     type: 'n8n-nodes-base.splitInBatches',
     typeVersion: 3,
-    position: [200, 400],
+    position: [860, 160],
     parameters: { options: {} },
   });
 
-  // ── Row 2: Content Generation Pipeline (y=400..700) ──────────────────────
+  // ── Row 2: SERP Research (y=380) ─────────────────────────────────────────
 
-  // Search in Tavily (for TOC research)
+  // SerpAPI call for the keyword (HTTP Request — not an agent tool, feeds context)
   nodes.push({
-    id: 'tavily1',
-    name: 'Bail Bonds SERP Research',
-    type: '@tavily/n8n-nodes-tavily.tavilyTool',
-    typeVersion: 1,
-    position: [200, 640],
-    parameters: {},
+    id: 'serp-call',
+    name: 'SerpAPI SERP Research',
+    type: 'n8n-nodes-base.httpRequest',
+    typeVersion: 4.2,
+    position: [1100, 160],
+    parameters: {
+      method: 'GET',
+      url: 'https://serpapi.com/search.json',
+      sendQuery: true,
+      queryParameters: {
+        parameters: [
+          { name: 'q',       value: '={{ $json.Keyword }}' },
+          { name: 'api_key', value: '={{ $env.SERP_API_KEY }}' },
+          { name: 'num',     value: '10' },
+          { name: 'gl',      value: 'us' },
+          { name: 'hl',      value: 'en' },
+        ],
+      },
+      options: {},
+    },
   });
+
+  // Extract useful context from SERP response
+  nodes.push({
+    id: 'serp-extract',
+    name: 'Extract SERP Context',
+    type: 'n8n-nodes-base.code',
+    typeVersion: 2,
+    position: [1340, 160],
+    parameters: { jsCode: SERP_EXTRACT_CODE },
+  });
+
+  // ── Row 3: Content Generation Pipeline (y=380..640) ──────────────────────
+
+  // SerpAPI as AI tool (for agents that need live research)
+  const serpToolTOC  = serpTool(1580, 560, 'SerpAPI Research');
+  const serpToolEEAT = serpTool(400,  880, 'SerpAPI Fact Check');
 
   // Table of Contents Agent
   nodes.push({
@@ -509,96 +452,81 @@ return output.length > 0 ? output : [{ Keyword: $json.Keyword, 'Suggested Keywor
     name: 'Table of Contents',
     type: '@n8n/n8n-nodes-langchain.agent',
     typeVersion: 1.7,
-    position: [460, 400],
+    position: [1580, 380],
     parameters: {
-      text: PROMPT_TOC_USER,
-      options: { systemMessage: PROMPT_TOC_SYSTEM },
+      text: P_TOC_USER,
+      options: { systemMessage: P_TOC_SYS },
     },
   });
-  const tocModel = claudeModel(460, 640);
+  const tocModel = claudeNode(1820, 560, 'Claude — TOC');
   aiConn(tocModel, 'Table of Contents');
-  toolConn('Bail Bonds SERP Research', 'Table of Contents');
+  toolConn(serpToolTOC, 'Table of Contents');
 
-  // Create the Sections (structured section list)
+  // Create Sections (expand TOC into detailed section briefs)
   nodes.push({
     id: 'create-sections',
-    name: 'Create the Sections',
-    type: 'n8n-nodes-base.openAi',
-    typeVersion: 1.8,
-    position: [700, 400],
+    name: 'Create Section Briefs',
+    type: '@n8n/n8n-nodes-langchain.agent',
+    typeVersion: 1.7,
+    position: [1820, 380],
     parameters: {
-      resource: 'chat',
-      model: { value: 'gpt-4o-mini' },
-      messages: {
-        values: [{
-          role: 'user',
-          content: `=You are given a table of contents outline for a bail bonds blog article.
-Expand it into a detailed JSON structure.
+      text: `=You are given a table of contents outline for a bail bonds article.
+Expand each section into a detailed brief.
 
 Outline: {{ $json.output }}
+Primary keyword: {{ $('Loop Over Items').item.json.Keyword }}
+SERP context: {{ $('Extract SERP Context').item.json.serp_context }}
 
-For each section, provide:
-- "title": exact H2 title
-- "description": 2-3 sentence description of what this section should cover, specific to bail bonds in California
-
-Return ONLY a JSON object: { "blogSections": [{ "title": "...", "description": "..." }, ...] }`,
-        }],
+Return JSON: { "blogSections": [{ "title": "exact H2 title", "description": "2-3 sentence content brief specific to bail bonds in California" }] }`,
+      options: {
+        systemMessage: `You are a bail bonds content strategist. Expand table of contents outlines into detailed, specific content briefs for California bail bonds articles. Be precise and actionable — describe exactly what each section should cover.`,
       },
     },
   });
+  const sectionModel = claudeNode(2060, 560, 'Claude — Sections');
+  aiConn(sectionModel, 'Create Section Briefs');
 
-  // Split Out sections
+  // Split sections into individual items
   nodes.push({
-    id: 'split-sections',
+    id: 'split',
     name: 'Split Out Sections',
     type: 'n8n-nodes-base.splitOut',
     typeVersion: 1,
-    position: [940, 480],
+    position: [2060, 380],
     parameters: { fieldToSplitOut: 'message.content.blogSections', options: {} },
   });
 
-  // Generate Content per section
+  // Generate content per section
   nodes.push({
     id: 'gen-content',
     name: 'Generate Section Content',
     type: '@n8n/n8n-nodes-langchain.agent',
     typeVersion: 1.7,
-    position: [1180, 400],
+    position: [2300, 380],
     parameters: {
-      text: PROMPT_CONTENT_USER,
-      options: { systemMessage: PROMPT_CONTENT_SYSTEM },
+      text: P_CONTENT_USER,
+      options: { systemMessage: P_CONTENT_SYS },
     },
   });
-  // Search for research inside content gen
-  nodes.push({
-    id: 'tavily2',
-    name: 'Section Research',
-    type: '@tavily/n8n-nodes-tavily.tavilyTool',
-    typeVersion: 1,
-    position: [1180, 640],
-    parameters: {},
-  });
-  const contentModel = claudeModel(1420, 640);
+  const contentModel = claudeNode(2300, 560, 'Claude — Content');
   aiConn(contentModel, 'Generate Section Content');
-  toolConn('Section Research', 'Generate Section Content');
 
-  // Merge sections back
+  // Merge + Aggregate all sections
   nodes.push({
     id: 'merge-sections',
     name: 'Merge Sections',
     type: 'n8n-nodes-base.merge',
     typeVersion: 3,
-    position: [1540, 480],
+    position: [2540, 460],
     parameters: { mode: 'combine', combineBy: 'combineByPosition', options: {} },
   });
 
-  // Aggregate all sections
   nodes.push({
     id: 'aggregate',
     name: 'Aggregate Sections',
     type: 'n8n-nodes-base.aggregate',
     typeVersion: 1,
-    position: [1760, 480],
+    position: [2760, 460],
     parameters: {
       fieldsToAggregate: {
         fieldToAggregate: [{ fieldToAggregate: 'title' }, { fieldToAggregate: 'output' }],
@@ -607,219 +535,153 @@ Return ONLY a JSON object: { "blogSections": [{ "title": "...", "description": "
     },
   });
 
-  // ── Row 3: EEAT + Editorial Pipeline (y=700..1000) ───────────────────────
+  // ── Row 4: Editorial + EEAT (y=640..880) ─────────────────────────────────
 
-  // Content Editor
   nodes.push({
     id: 'editor',
     name: 'Content Editor',
     type: '@n8n/n8n-nodes-langchain.agent',
     typeVersion: 1.7,
-    position: [200, 800],
+    position: [860, 640],
     parameters: {
-      text: `=List of section titles: {{ $json.title }}
-List of section content: {{ $json.output }}`,
-      options: { systemMessage: PROMPT_EDITOR_SYSTEM },
+      text: `=Section titles: {{ $json.title }}
+Section content: {{ $json.output }}`,
+      options: { systemMessage: P_EDITOR_SYS },
     },
   });
-  const editorModel = claudeModel(200, 1040);
+  const editorModel = claudeNode(860, 880, 'Claude — Editor');
   aiConn(editorModel, 'Content Editor');
 
-  // EEAT Agent
   nodes.push({
     id: 'eeat',
     name: 'EEAT Enhancement',
     type: '@n8n/n8n-nodes-langchain.agent',
     typeVersion: 1.7,
-    position: [540, 800],
+    position: [1120, 640],
     parameters: {
-      text: `=Here is the full bail bonds article draft:
+      text: `=Article draft:
 {{ $json.output }}
 
-Apply all four EEAT enhancements as instructed. This is YMYL content for a real licensed bail bonds agency — accuracy and trustworthiness are critical.`,
-      options: { systemMessage: PROMPT_EEAT_SYSTEM },
+Apply all four EEAT enhancements. This is YMYL content for a real licensed California bail bond agency — accuracy and trust signals are critical.`,
+      options: { systemMessage: P_EEAT_SYS },
     },
   });
-  const eeatModel = claudeModel(540, 1040);
+  const eeatModel = claudeNode(1120, 880, 'Claude — EEAT');
   aiConn(eeatModel, 'EEAT Enhancement');
+  toolConn(serpToolEEAT, 'EEAT Enhancement');
 
-  // Content Editor 2 — final assembly
   nodes.push({
     id: 'editor2',
     name: 'Final Article Assembly',
     type: '@n8n/n8n-nodes-langchain.agent',
     typeVersion: 1.7,
-    position: [880, 800],
+    position: [1380, 640],
     parameters: {
-      text: `=Article Draft:
+      text: `=Article draft:
 {{ $('Content Editor').item.json.output }}
 
-EEAT Enhancements:
+EEAT enhancements:
 {{ $json.output }}
 
-Assemble into one clean, professional HTML article ready for WordPress.`,
-      options: { systemMessage: PROMPT_EDITOR2_SYSTEM },
+Assemble into one clean, professional HTML article.`,
+      options: { systemMessage: P_EDITOR2_SYS },
     },
   });
-  const editor2Model = claudeModel(880, 1040);
+  const editor2Model = claudeNode(1380, 880, 'Claude — Final');
   aiConn(editor2Model, 'Final Article Assembly');
 
-  // ── Row 4: Title + Meta + Image + WordPress (y=1000..1300) ───────────────
+  // ── Row 5: Title + Meta + Image + Output (y=640 continue) ────────────────
 
-  // Title Maker
   nodes.push({
     id: 'title',
     name: 'Title Maker',
-    type: 'n8n-nodes-base.openAi',
-    typeVersion: 1.8,
-    position: [1200, 800],
+    type: '@n8n/n8n-nodes-langchain.agent',
+    typeVersion: 1.7,
+    position: [1640, 640],
     parameters: {
-      resource: 'chat',
-      model: { value: 'gpt-4o-mini' },
-      messages: {
-        values: [{
-          role: 'user',
-          content: `=Create an SEO-optimized blog article title for this bail bonds article.
+      text: `=Write a single SEO-optimized blog title.
 
-Target keyword: {{ $('Loop Over Items').item.json['Suggested Keyword'] }}
-Article content excerpt: {{ $('Final Article Assembly').item.json.output.slice(0, 500) }}
+Target keyword: {{ $('Loop Over Items').item.json.Keyword }}
+Article excerpt: {{ $('Final Article Assembly').item.json.output.slice(0, 600) }}
 
-Requirements:
+Rules:
 - Max 65 characters
-- Include the primary keyword naturally
-- Include a location or urgency signal when appropriate
-- Examples of good titles: "How to Get a Bail Bond in City of Industry — Fast & Affordable", "24/7 Bail Bonds: What to Do When a Loved One Is Arrested in LA County"
+- Include the keyword naturally
+- Include urgency or location signal when appropriate
 - Return ONLY the title, nothing else`,
-        }],
+      options: {
+        systemMessage: `You are an SEO title writer for a bail bonds agency. Write compelling, keyword-optimized titles for bail bonds blog posts. Examples: "24/7 Bail Bonds in City of Industry — Fast, Licensed & Affordable", "How Bail Bonds Work in California: A Step-by-Step Guide"`,
       },
     },
   });
+  const titleModel = claudeNode(1640, 880, 'Claude — Title');
+  aiConn(titleModel, 'Title Maker');
 
-  // Structured Output Parser for metadata
+  // Metadata parser
   nodes.push({
     id: 'meta-parser',
     name: 'Meta Output Parser',
     type: '@n8n/n8n-nodes-langchain.outputParserStructured',
     typeVersion: 1.2,
-    position: [1680, 1040],
+    position: [1900, 880],
     parameters: {
       schemaType: 'manual',
-      inputSchema: `{"type":"object","properties":{"slug":{"type":"string"},"metaTitle":{"type":"string"},"metaDescription":{"type":"string"},"focusKeyword":{"type":"string"},"keywords":{"type":"array","items":{"type":"string"}}},"required":["slug","metaTitle","metaDescription","focusKeyword","keywords"]}`,
+      inputSchema: JSON.stringify({
+        type: 'object',
+        properties: {
+          slug:            { type: 'string' },
+          metaTitle:       { type: 'string' },
+          metaDescription: { type: 'string' },
+          focusKeyword:    { type: 'string' },
+          keywords:        { type: 'array', items: { type: 'string' } },
+        },
+        required: ['slug', 'metaTitle', 'metaDescription', 'focusKeyword', 'keywords'],
+      }),
     },
   });
 
-  // Blog Metadata Agent
   nodes.push({
     id: 'metadata',
     name: 'Generate Blog Metadata',
     type: '@n8n/n8n-nodes-langchain.agent',
     typeVersion: 1.7,
-    position: [1540, 800],
+    position: [1900, 640],
     parameters: {
-      text: `=Title: {{ $json.message.content }}
-Article content: {{ $('Final Article Assembly').item.json.output }}`,
-      options: { systemMessage: PROMPT_META_SYSTEM },
+      text: `=Title: {{ $json.output }}
+Article: {{ $('Final Article Assembly').item.json.output }}`,
+      options: { systemMessage: P_META_SYS },
     },
   });
-  const metaModel = claudeModel(1540, 1040);
+  const metaModel = claudeNode(2140, 880, 'Claude — Meta');
   aiConn(metaModel, 'Generate Blog Metadata');
   parserConn('Meta Output Parser', 'Generate Blog Metadata');
 
-  // Structured Output Parser for image
-  nodes.push({
-    id: 'image-parser',
-    name: 'Image Output Parser',
-    type: '@n8n/n8n-nodes-langchain.outputParserStructured',
-    typeVersion: 1.2,
-    position: [200, 1280],
-    parameters: {
-      schemaType: 'manual',
-      inputSchema: `{"type":"object","properties":{"imagePrompt":{"type":"string"},"altText":{"type":"string"}},"required":["imagePrompt","altText"]}`,
-    },
-  });
+  // ── Row 6: Save to Google Docs ───────────────────────────────────────────
 
-  // Image Prompt Agent
-  nodes.push({
-    id: 'image-prompt',
-    name: 'Generate Image Prompt',
-    type: '@n8n/n8n-nodes-langchain.agent',
-    typeVersion: 1.7,
-    position: [200, 1080],
-    parameters: {
-      text: `=Title: {{ $('Title Maker').item.json.message.content }}
-Article excerpt: {{ $('Final Article Assembly').item.json.output.slice(0, 800) }}`,
-      options: { systemMessage: PROMPT_IMAGE_SYSTEM },
-    },
-  });
-  const imageModel = claudeModel(460, 1280);
-  aiConn(imageModel, 'Generate Image Prompt');
-  parserConn('Image Output Parser', 'Generate Image Prompt');
-
-  // Generate Featured Image (DALL-E)
-  nodes.push({
-    id: 'gen-image',
-    name: 'Generate Featured Image',
-    type: 'n8n-nodes-base.openAi',
-    typeVersion: 1.8,
-    position: [560, 1080],
-    parameters: {
-      resource: 'image',
-      operation: 'generate',
-      prompt: "={{ $json.output.imagePrompt }}",
-      options: { size: '1792x1024', quality: 'standard', style: 'natural' },
-    },
-  });
-
-  // Resize Image
-  nodes.push({
-    id: 'resize',
-    name: 'Resize Image',
-    type: 'n8n-nodes-base.editImage',
-    typeVersion: 1,
-    position: [780, 1080],
-    parameters: { operation: 'resize', width: 1200, height: 630, options: {} },
-  });
-
-  // Save image to Google Drive (so it's accessible alongside the doc)
-  nodes.push({
-    id: 'gdrive-image',
-    name: 'Save Image to Drive',
-    type: 'n8n-nodes-base.googleDrive',
-    typeVersion: 3,
-    position: [980, 1080],
-    parameters: {
-      operation: 'upload',
-      name: "=ABB_{{ $('Generate Blog Metadata').item.json.output.slug }}_featured.png",
-      driveId: { __rl: true, value: 'My Drive', mode: 'list' },
-      folderId: GDRIVE_FOLDER_ID
-        ? { __rl: true, value: GDRIVE_FOLDER_ID, mode: 'id' }
-        : { __rl: true, value: 'root', mode: 'list' },
-      options: {},
-    },
-  });
-
-  // Create Google Doc with the full article
   nodes.push({
     id: 'gdocs-create',
     name: 'Create Article Google Doc',
     type: 'n8n-nodes-base.googleDocs',
     typeVersion: 2,
-    position: [1200, 1080],
+    position: [3100, 640],
     parameters: {
       operation: 'create',
-      title: "={{ $('Title Maker').item.json.message.content }}",
-      content: `=# {{ $('Title Maker').item.json.message.content }}
+      title: "={{ $('Title Maker').item.json.output }}",
+      content: `=# {{ $('Title Maker').item.json.output }}
 
 ---
-**Keyword:** {{ $('Loop Over Items').item.json['Suggested Keyword'] }}
-**Search Volume:** {{ $('Loop Over Items').item.json['Search Volume'] }}
-**SERPROBOT Rank:** {{ $('Loop Over Items').item.json['serprobot_rank'] || 'Not tracked' }}
-**Meta Description:** {{ $('Generate Blog Metadata').item.json.output.metaDescription }}
-**Slug:** {{ $('Generate Blog Metadata').item.json.output.slug }}
-**Focus Keyword:** {{ $('Generate Blog Metadata').item.json.output.focusKeyword }}
-**Keywords:** {{ $('Generate Blog Metadata').item.json.output.keywords.join(', ') }}
-**Site:** ${SITE_URL}
-**Generated:** {{ $now }}
+Keyword: {{ $('Loop Over Items').item.json.Keyword }}
+Volume: {{ $('Loop Over Items').item.json.Volume }}
+SERPROBOT Rank: {{ $('Loop Over Items').item.json.serprobot_rank || 'Not tracked' }}
+Score: {{ $('Loop Over Items').item.json.score }}
+Meta Title: {{ $('Generate Blog Metadata').item.json.output.metaTitle }}
+Meta Description: {{ $('Generate Blog Metadata').item.json.output.metaDescription }}
+Slug: {{ $('Generate Blog Metadata').item.json.output.slug }}
+Focus Keyword: {{ $('Generate Blog Metadata').item.json.output.focusKeyword }}
+Keywords: {{ $('Generate Blog Metadata').item.json.output.keywords.join(', ') }}
+Site: ${SITE_URL}
+Generated: {{ $now }}
+Image: (add manually)
 
 ---
 
@@ -827,127 +689,119 @@ Article excerpt: {{ $('Final Article Assembly').item.json.output.slice(0, 800) }
     },
   });
 
-  // Update Google Doc with formatted HTML content (second pass — append SEO block)
-  nodes.push({
-    id: 'gdocs-meta',
-    name: 'Append SEO Metadata Block',
-    type: 'n8n-nodes-base.googleDocs',
-    typeVersion: 2,
-    position: [1440, 1080],
-    parameters: {
-      operation: 'update',
-      documentURL: '={{ $json.id }}',
-      actionsUi: {
-        actionFields: [{
-          action: 'insert',
-          text: `=\n\n---\n## SEO Metadata\n\n- **slug**: {{ $('Generate Blog Metadata').item.json.output.slug }}\n- **metaTitle**: {{ $('Generate Blog Metadata').item.json.output.metaTitle }}\n- **metaDescription**: {{ $('Generate Blog Metadata').item.json.output.metaDescription }}\n- **focusKeyword**: {{ $('Generate Blog Metadata').item.json.output.focusKeyword }}\n- **keywords**: {{ $('Generate Blog Metadata').item.json.output.keywords.join(', ') }}\n- **imageAlt**: {{ $('Generate Image Prompt').item.json.output.altText }}\n- **imagePrompt**: {{ $('Generate Image Prompt').item.json.output.imagePrompt }}\n- **site**: ${SITE_URL}\n`,
-        }],
-      },
-    },
-  });
-
-  // Update Status in Google Sheets (Sheet3 Content Pipeline tab)
+  // Log status back to Sheet3 — Content Pipeline tab
   nodes.push({
     id: 'gs-status',
     name: 'Update Content Status',
     type: 'n8n-nodes-base.googleSheets',
     typeVersion: 4.5,
-    position: [1680, 1080],
+    position: [3340, 640],
     parameters: {
       operation: 'append',
       documentId: { __rl: true, value: SHEET_KEYWORD_INVENTORY, mode: 'id' },
-      sheetName: { __rl: true, value: 'Content Pipeline', mode: 'name' },
+      sheetName:  { __rl: true, value: 'Content Pipeline', mode: 'name' },
       columns: {
         mappingMode: 'defineBelow',
         value: {
-          'Suggested Keyword':  "={{ $('Loop Over Items').item.json['Suggested Keyword'] }}",
-          'Status':             '=Ready for Review',
-          'Google Doc URL':     '={{ $json.documentUrl || $json.id }}',
-          'Generated At':       "={{ $now }}",
-          'Title':              "={{ $('Title Maker').item.json.message.content }}",
-          'Slug':               "={{ $('Generate Blog Metadata').item.json.output.slug }}",
-          'Meta Description':   "={{ $('Generate Blog Metadata').item.json.output.metaDescription }}",
-          'Focus Keyword':      "={{ $('Generate Blog Metadata').item.json.output.focusKeyword }}",
-          'SERPROBOT Rank':     "={{ $('Loop Over Items').item.json['serprobot_rank'] || 'N/A' }}",
-          'Search Volume':      "={{ $('Loop Over Items').item.json['Search Volume'] }}",
+          Keyword:           "={{ $('Loop Over Items').item.json.Keyword }}",
+          Status:            '=Ready for Review',
+          'Google Doc URL':  '={{ $json.documentUrl || $json.id }}',
+          'Generated At':    '={{ $now }}',
+          Title:             "={{ $('Title Maker').item.json.output }}",
+          Slug:              "={{ $('Generate Blog Metadata').item.json.output.slug }}",
+          'Meta Description':"={{ $('Generate Blog Metadata').item.json.output.metaDescription }}",
+          'Focus Keyword':   "={{ $('Generate Blog Metadata').item.json.output.focusKeyword }}",
+          'SERPROBOT Rank':  "={{ $('Loop Over Items').item.json.serprobot_rank || 'N/A' }}",
+          Volume:            "={{ $('Loop Over Items').item.json.Volume }}",
+          Score:             "={{ $('Loop Over Items').item.json.score }}",
         },
       },
       options: {},
     },
   });
 
-  // Sticky Notes
+  // ── Sticky Notes ──────────────────────────────────────────────────────────
   nodes.push({
-    id: 'note1',
-    name: 'Note: Keyword Pipeline',
+    id: 'note-input',
+    name: 'Note: Keyword Input',
     type: 'n8n-nodes-base.stickyNote',
     typeVersion: 1,
-    position: [-820, -60],
-    parameters: { content: '## 📊 Keyword Input\n\nReads from:\n- **Sheet3**: Keyword Inventory (City of Industry tab)\n- **Sheet4**: SERPROBOT Rankings\n\nEnriches and scores keywords. Skips keywords already ranking #1–#4. Prioritizes rank #5–#30 opportunities.', color: 5 },
+    position: [-820, -40],
+    parameters: {
+      content: `## 📊 Keyword Input (Manual Research)
+Reads directly from your Google Sheets — no DataForSEO.
+
+**Sheet3** (Keyword Inventory — City of Industry tab):
+Keyword, Volume, KD, Presence in SERPROBOT List?
+
+**Sheet4** (clean list — SERPROBOT):
+Keyword, Latest rank, L-Vol, G-Vol
+
+Enrichment cross-references both sheets.
+Skips keywords already ranking **#1–4**.
+Prioritises **#5–30** opportunities.`,
+      color: 5,
+    },
   });
+
   nodes.push({
-    id: 'note2',
-    name: 'Note: Content Pipeline',
+    id: 'note-ai',
+    name: 'Note: AI + Research',
     type: 'n8n-nodes-base.stickyNote',
     typeVersion: 1,
-    position: [180, 340],
-    parameters: { content: '## ✍️ Content Generation\n\nUses Claude claude-opus-4-6 (via OpenRouter) for all AI steps.\n\nBail bonds YMYL/EEAT prompts — experience, expertise, authority, trust signals built in.', color: 4 },
-  });
-  nodes.push({
-    id: 'note3',
-    name: 'Note: Output',
-    type: 'n8n-nodes-base.stickyNote',
-    typeVersion: 1,
-    position: [960, 960],
-    parameters: { content: `## 📄 Output: Google Docs + Sheets\n\nSite: **${SITE_URL}** (Lovable.dev — React)\n\nEach article is saved as a **Google Doc** with:\n- Full HTML article content\n- SEO metadata block (slug, metaTitle, metaDescription, focus keyword)\n- Featured image saved to Google Drive\n\nStatus logged back to **Sheet3 → Content Pipeline** tab:\n- Title, Slug, Google Doc URL, Meta Description, Status\n\nReview docs → copy to Lovable site CMS.`, color: 4 },
+    position: [840, -40],
+    parameters: {
+      content: `## 🤖 AI + Research
+**AI**: Claude claude-opus-4-6 (native Anthropic API)
+Set credentials in n8n: *anthropicApi*
+
+**Research**: SerpAPI
+- Pre-content SERP call enriches keyword with top results + PAA
+- SerpAPI also available as live tool inside TOC + EEAT agents
+Set env var: \`SERP_API_KEY\` in n8n
+
+**Output**: Google Docs + status → Sheet3 Content Pipeline tab
+Site: ${SITE_URL} (Lovable.dev — review Docs then publish)`,
+      color: 4,
+    },
   });
 
   // ── Connections ────────────────────────────────────────────────────────────
 
-  // Triggers → keyword read
-  conn('Schedule Trigger',     'ABB Keyword Inventory');
-  conn('Manual Trigger',       'ABB Keyword Inventory');
-  conn('ABB Keyword Inventory', 'Merge Keyword Sources', 0, 0);
-  conn('SERPROBOT Rankings',    'Merge Keyword Sources', 0, 1);
-  conn('Merge Keyword Sources', 'Enrich Keywords');
-  conn('Enrich Keywords',       'HTTP Keyword Suggestions');
-  conn('HTTP Keyword Suggestions', 'Extract Suggestions');
-  conn('Extract Suggestions',   'Log Keyword Suggestions');
-  conn('Log Keyword Suggestions', 'Score Keywords');
-  conn('Score Keywords',        'Sort by Score');
-  conn('Sort by Score',         'Top 3 Keywords');
-  conn('Top 3 Keywords',        'Loop Over Items');
+  // Triggers
+  conn('Schedule Trigger',        'ABB Keyword Inventory');
+  conn('Manual Trigger',          'ABB Keyword Inventory');
 
-  // Loop → content
-  conn('Loop Over Items',       'Table of Contents', 0, 0);
+  // Keyword pipeline
+  conn('ABB Keyword Inventory',   'Merge Keyword Sources', 0, 0);
+  conn('SERPROBOT Rankings',       'Merge Keyword Sources', 0, 1);
+  conn('Merge Keyword Sources',   'Enrich Keywords');
+  conn('Enrich Keywords',         'Score Keywords');
+  conn('Score Keywords',          'Sort by Score');
+  conn('Sort by Score',           'Top 3 Keywords');
+  conn('Top 3 Keywords',          'Loop Over Items');
 
-  // TOC → sections
-  conn('Table of Contents',     'Create the Sections');
-  conn('Create the Sections',   'Split Out Sections');
-  conn('Split Out Sections',    'Merge Sections',          0, 0);
-  conn('Generate Section Content', 'Merge Sections',       0, 1);
-  conn('Merge Sections',        'Aggregate Sections');
+  // Loop → SERP research → content
+  conn('Loop Over Items',         'SerpAPI SERP Research', 0, 0);
+  conn('SerpAPI SERP Research',   'Extract SERP Context');
+  conn('Extract SERP Context',    'Table of Contents');
+  conn('Table of Contents',       'Create Section Briefs');
+  conn('Create Section Briefs',   'Split Out Sections');
+  conn('Split Out Sections',      'Merge Sections',     0, 0);
+  conn('Generate Section Content','Merge Sections',     0, 1);
+  conn('Merge Sections',          'Aggregate Sections');
 
-  // Aggregate → editor pipeline
-  conn('Aggregate Sections',    'Content Editor');
-  conn('Content Editor',        'EEAT Enhancement');
-  conn('EEAT Enhancement',      'Final Article Assembly');
+  // Aggregate → editorial
+  conn('Aggregate Sections',      'Content Editor');
+  conn('Content Editor',          'EEAT Enhancement');
+  conn('EEAT Enhancement',        'Final Article Assembly');
+  conn('Final Article Assembly',  'Title Maker');
+  conn('Title Maker',             'Generate Blog Metadata');
 
-  // Editorial → title + meta
-  conn('Final Article Assembly', 'Title Maker');
-  conn('Title Maker',           'Generate Blog Metadata');
-  conn('Title Maker',           'Generate Image Prompt');
-
-  // Image pipeline → Google Drive
-  conn('Generate Image Prompt',     'Generate Featured Image');
-  conn('Generate Featured Image',   'Resize Image');
-  conn('Resize Image',              'Save Image to Drive');
-
-  // Google Docs article creation
-  conn('Title Maker',               'Create Article Google Doc');
-  conn('Create Article Google Doc', 'Append SEO Metadata Block');
-  conn('Append SEO Metadata Block', 'Update Content Status');
-  conn('Update Content Status',     'Loop Over Items');  // loop back
+  // Docs + status (no image generation)
+  conn('Generate Blog Metadata',  'Create Article Google Doc');
+  conn('Create Article Google Doc','Update Content Status');
+  conn('Update Content Status',   'Loop Over Items');  // loop back
 
   return {
     name: 'Angels Bail Bonds — SEO Content Generator',
@@ -961,24 +815,24 @@ Article excerpt: {{ $('Final Article Assembly').item.json.output.slice(0, 800) }
   };
 }
 
-// ── Create the workflow ────────────────────────────────────────────────────
+// ── Run ────────────────────────────────────────────────────────────────────
 async function main() {
   console.log('Building Angels Bail Bonds SEO workflow...');
-  const workflow = buildWorkflow();
-  console.log(`Node count: ${workflow.nodes.length}`);
+  const wf = buildWorkflow();
+  console.log(`Nodes: ${wf.nodes.length}`);
 
-  const result = await n8nPost('/workflows', workflow);
+  const result = await n8nPost('/workflows', wf);
   console.log('\n✅ Workflow created!');
   console.log(`ID:   ${result.id}`);
   console.log(`Name: ${result.name}`);
   console.log(`URL:  ${N8N_BASE_URL}/workflow/${result.id}`);
-  console.log('\nNext steps:');
-  console.log('1. Open the workflow in n8n and review the layout');
-  console.log('2. Connect credentials for: DataForSEO, OpenRouter, Google Sheets, Google Drive, Google Docs, Tavily');
-  console.log('3. (Optional) Create an "SEO Articles" folder in Google Drive and paste its ID in GDRIVE_FOLDER_ID');
-  console.log('4. The "Content Pipeline" tab in Sheet3 will be created automatically on first run');
-  console.log('5. Run manually to test — articles save as Google Docs ready for review');
-  console.log('6. Site: ' + SITE_URL + ' (Lovable.dev — copy content from Docs into your CMS)');
+  console.log('\nCredentials to connect in n8n:');
+  console.log('  • anthropicApi   → Claude claude-opus-4-6');
+  console.log('  • SERP_API_KEY   → add to n8n environment variables');
+  console.log('  • googleSheetsOAuth2Api → Google Sheets (both keyword sheets)');
+  console.log('  • googleDocsOAuth2Api   → Google Docs (article output)');
+  console.log('  • googleDriveOAuth2Api  → Google Drive (image storage)');
+  console.log('  (Image generation not included — add manually when ready)');
 }
 
 main().catch(e => { console.error('Error:', e.message); process.exit(1); });
