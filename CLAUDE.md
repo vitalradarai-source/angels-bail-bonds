@@ -69,6 +69,29 @@ angels-bail-bonds/
 - Run Trigger.dev: `npx trigger.dev@latest dev --env-file .env`
 - When reopening this project, Claude reads this file for full context
 
+## Key Workflows in n8n
+| Workflow | ID | Description |
+|---|---|---|
+| Complete SEO Automation | oszuSu23QtjeucvlR1aGp | Original (Dutch cycling site) — reference only |
+| Angels Bail Bonds SEO Content Generator | xnUQkL4nkbGvGIic | **Active** — ABB keyword sheets → Claude content → Google Docs |
+| SpyFu Report Analyzer | 9Xw3q2PtO1LPC4JH | SEO/PPC report via email |
+
+## ABB SEO Workflow (xnUQkL4nkbGvGIic) — Key Details
+- **Site**: https://bailbondsdomesticviolence.com (Lovable.dev / React — NOT WordPress)
+- **Keyword input**: Sheet3 (City of Industry tab) + Sheet4 (SERPROBOT clean list)
+- **Scoring**: Volume × KD_penalty × SERPROBOT_rank_bonus (skips #1-4 ranked, prioritizes #5-30)
+- **AI**: Claude claude-opus-4-6 via OpenRouter for all content agents
+- **Output**: Google Docs (1 doc per article) + status logged to Sheet3 "Content Pipeline" tab
+- **Credentials needed in n8n**: DataForSEO, OpenRouter, Google Sheets, Google Drive, Google Docs, Tavily
+
+## Google Sheets — Keyword Research
+| Sheet | ID | Purpose |
+|---|---|---|
+| Keywords used in drafts | 1I3YIGuO13tc8ElRhZyQHmgj04m3NVBkmvC_iouM3XHo | Exact keywords per page with intent/placement |
+| Domestic Violence Keyword Bank | 1jYTxX73TLMmt03YB2ia__ayS5Lp2KTIOgNzMoCE64qo | FAQ keyword bank |
+| Keyword Inventory | 139W8Bw6F9-ujDi3eEFw77RzMZYd6fQEO7kUZbLshNYA | Keyword + Volume + KD (by city) |
+| Keyword Bank (SERPROBOT/SEMRush) | 1qsR83Vg7R-yatxuQGAwlzCamWdImbY5sl3Jd6107fHs | Full keyword bank with current rankings |
+
 ## Chat Log Summary
 - 2026-02-26: Initial setup — local folder, GitHub repo, CLAUDE.md, auto-save cron
 - 2026-02-26: Connected APIs — Trigger.dev, n8n, Anthropic/Claude, ClickUp
@@ -82,3 +105,7 @@ angels-bail-bonds/
 - 2026-02-26: Added SerpRobot API (rank tracking, 10 paid credits — use manually only)
 - 2026-02-26: Built SpyFu Report Analyzer workflow in n8n (ID: 9Xw3q2PtO1LPC4JH)
 - 2026-02-26: Master prompts created for SEO + PPC analysis (src/prompts/)
+- 2026-02-28: Built ABB SEO Content Generator workflow (ID: xnUQkL4nkbGvGIic)
+  - Incorporates all 4 keyword research Google Sheets
+  - Outputs to Google Docs (not WordPress — site is Lovable.dev)
+  - YMYL/EEAT bail bonds prompts for Claude claude-opus-4-6

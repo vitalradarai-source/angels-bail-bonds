@@ -895,11 +895,11 @@ Article excerpt: {{ $('Final Article Assembly').item.json.output.slice(0, 800) }
   });
   nodes.push({
     id: 'note3',
-    name: 'Note: WordPress',
+    name: 'Note: Output',
     type: 'n8n-nodes-base.stickyNote',
     typeVersion: 1,
     position: [960, 960],
-    parameters: { content: `## 🌐 WordPress Setup\n\n**TODO**: \n1. Set \`${WP_URL}\` in the WP nodes above (replace with actual URL)\n2. Add WordPress API credentials in n8n\n3. Set correct category IDs for bail bonds posts\n\nAll posts created as **drafts** — review before publishing.`, color: 6 },
+    parameters: { content: `## 📄 Output: Google Docs + Sheets\n\nSite: **${SITE_URL}** (Lovable.dev — React)\n\nEach article is saved as a **Google Doc** with:\n- Full HTML article content\n- SEO metadata block (slug, metaTitle, metaDescription, focus keyword)\n- Featured image saved to Google Drive\n\nStatus logged back to **Sheet3 → Content Pipeline** tab:\n- Title, Slug, Google Doc URL, Meta Description, Status\n\nReview docs → copy to Lovable site CMS.`, color: 4 },
   });
 
   // ── Connections ────────────────────────────────────────────────────────────
@@ -938,19 +938,19 @@ Article excerpt: {{ $('Final Article Assembly').item.json.output.slice(0, 800) }
   conn('Title Maker',           'Generate Blog Metadata');
   conn('Title Maker',           'Generate Image Prompt');
 
-  // Image pipeline
-  conn('Generate Image Prompt', 'Generate Featured Image');
-  conn('Generate Featured Image', 'Resize Image');
-  conn('Resize Image',          'Upload Image To WP');
-  conn('Upload Image To WP',    'Update Image Meta');
-  conn('Update Image Meta',     'Post Blog To WP');
-  conn('Post Blog To WP',       'Set Featured Image');
-  conn('Set Featured Image',    'Update Content Status');
-  conn('Update Content Status', 'Loop Over Items');  // loop back
+  // Image pipeline → Google Drive
+  conn('Generate Image Prompt',     'Generate Featured Image');
+  conn('Generate Featured Image',   'Resize Image');
+  conn('Resize Image',              'Save Image to Drive');
+
+  // Google Docs article creation
+  conn('Title Maker',               'Create Article Google Doc');
+  conn('Create Article Google Doc', 'Append SEO Metadata Block');
+  conn('Append SEO Metadata Block', 'Update Content Status');
+  conn('Update Content Status',     'Loop Over Items');  // loop back
 
   return {
     name: 'Angels Bail Bonds — SEO Content Generator',
-    active: false,
     nodes,
     connections,
     settings: {
@@ -973,12 +973,12 @@ async function main() {
   console.log(`Name: ${result.name}`);
   console.log(`URL:  ${N8N_BASE_URL}/workflow/${result.id}`);
   console.log('\nNext steps:');
-  console.log('1. Open the workflow in n8n and review the node layout');
-  console.log('2. Add WordPress API credentials (n8n → Settings → Credentials)');
-  console.log('3. Update WordPress URL in the WP nodes (currently: ' + WP_URL + ')');
-  console.log('4. Ensure DataForSEO, OpenRouter, Google Sheets, Tavily credentials are connected');
-  console.log('5. Add a "Content Pipeline" tab to Sheet3 (will be created automatically on first run)');
-  console.log('6. Run manually to test — all posts publish as Drafts');
+  console.log('1. Open the workflow in n8n and review the layout');
+  console.log('2. Connect credentials for: DataForSEO, OpenRouter, Google Sheets, Google Drive, Google Docs, Tavily');
+  console.log('3. (Optional) Create an "SEO Articles" folder in Google Drive and paste its ID in GDRIVE_FOLDER_ID');
+  console.log('4. The "Content Pipeline" tab in Sheet3 will be created automatically on first run');
+  console.log('5. Run manually to test — articles save as Google Docs ready for review');
+  console.log('6. Site: ' + SITE_URL + ' (Lovable.dev — copy content from Docs into your CMS)');
 }
 
 main().catch(e => { console.error('Error:', e.message); process.exit(1); });
