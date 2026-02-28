@@ -3,12 +3,15 @@
   "scripts": {
     "mcp:n8n": "tsx src/mcp/n8n-server.ts",
     "mcp:clickup": "tsx src/mcp/clickup-server.ts",
-    "mcp:canva": "tsx src/mcp/canva-server.ts"
+    "mcp:canva": "tsx src/mcp/canva-server.ts",
+    "mcp:google": "tsx src/mcp/google-workspace-server.ts",
+    "setup:google-auth": "tsx src/scripts/setup-google-auth.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
     "@trigger.dev/sdk": "^4.4.1",
-    "dotenv": "^17.3.1"
+    "dotenv": "^17.3.1",
+    "googleapis": "^171.4.0"
   },
   "devDependencies": {
     "@trigger.dev/build": "^4.4.1",
