@@ -6,7 +6,9 @@
  *  2. Fetches related keyword suggestions from DataForSEO
  *  3. Scores keywords using volume, KD, and SERPROBOT rank opportunities
  *  4. Generates YMYL / EEAT-quality bail bonds blog content via Claude
- *  5. Posts as a draft to WordPress and writes status back to Google Sheets
+ *  5. Saves each article as a Google Doc for review + logs status back to Google Sheets
+ *
+ * Site: https://bailbondsdomesticviolence.com (Lovable.dev / React — NOT WordPress)
  *
  * Google Sheets used:
  *  - Sheet1 (Keywords used in drafts):  1I3YIGuO13tc8ElRhZyQHmgj04m3NVBkmvC_iouM3XHo
@@ -27,9 +29,13 @@ const SHEET_DRAFTS_CHECKLIST = '1I3YIGuO13tc8ElRhZyQHmgj04m3NVBkmvC_iouM3XHo';
 const SHEET_KEYWORD_INVENTORY = '139W8Bw6F9-ujDi3eEFw77RzMZYd6fQEO7kUZbLshNYA';
 const SHEET_KEYWORD_BANK      = '1qsR83Vg7R-yatxuQGAwlzCamWdImbY5sl3Jd6107fHs';
 
-// ── WordPress ──────────────────────────────────────────────────────────────
-// TODO: Replace with the actual Angels Bail Bonds WordPress URL
-const WP_URL = 'https://angelsbailbonds.com';
+// ── Site ───────────────────────────────────────────────────────────────────
+// Lovable.dev (React) site — content saved to Google Docs, NOT WordPress
+const SITE_URL = 'https://bailbondsdomesticviolence.com';
+
+// Google Drive folder ID to save articles into (optional — leave empty to use root)
+// Create a "SEO Articles" folder in Drive and paste its ID here
+const GDRIVE_FOLDER_ID = '';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 async function n8nPost(path: string, body: object) {
@@ -774,107 +780,79 @@ Article excerpt: {{ $('Final Article Assembly').item.json.output.slice(0, 800) }
     parameters: { operation: 'resize', width: 1200, height: 630, options: {} },
   });
 
-  // Upload Image to WordPress
+  // Save image to Google Drive (so it's accessible alongside the doc)
   nodes.push({
-    id: 'wp-upload',
-    name: 'Upload Image To WP',
-    type: 'n8n-nodes-base.httpRequest',
-    typeVersion: 4.2,
+    id: 'gdrive-image',
+    name: 'Save Image to Drive',
+    type: 'n8n-nodes-base.googleDrive',
+    typeVersion: 3,
     position: [980, 1080],
     parameters: {
-      method: 'POST',
-      url: `=${WP_URL}/wp-json/wp/v2/media`,
-      authentication: 'predefinedCredentialType',
-      nodeCredentialType: 'wordpressApi',
-      sendHeaders: true,
-      headerParameters: {
-        parameters: [
-          { name: 'content-disposition', value: '=attachment; filename={{ $binary.data.fileName }}.{{ $binary.data.fileExtension }}' },
-          { name: 'content-type',        value: '={{ $binary.data.mimeType }}' },
-        ],
-      },
-      sendBody: true,
-      contentType: 'binaryData',
-      inputDataFieldName: 'data',
+      operation: 'upload',
+      name: "=ABB_{{ $('Generate Blog Metadata').item.json.output.slug }}_featured.png",
+      driveId: { __rl: true, value: 'My Drive', mode: 'list' },
+      folderId: GDRIVE_FOLDER_ID
+        ? { __rl: true, value: GDRIVE_FOLDER_ID, mode: 'id' }
+        : { __rl: true, value: 'root', mode: 'list' },
       options: {},
     },
   });
 
-  // Update Image Meta
+  // Create Google Doc with the full article
   nodes.push({
-    id: 'wp-image-meta',
-    name: 'Update Image Meta',
-    type: 'n8n-nodes-base.httpRequest',
-    typeVersion: 4.2,
+    id: 'gdocs-create',
+    name: 'Create Article Google Doc',
+    type: 'n8n-nodes-base.googleDocs',
+    typeVersion: 2,
     position: [1200, 1080],
     parameters: {
-      method: 'POST',
-      url: `=${WP_URL}/wp-json/wp/v2/media/{{ $json.id }}`,
-      authentication: 'predefinedCredentialType',
-      nodeCredentialType: 'wordpressApi',
-      sendBody: true,
-      bodyParameters: {
-        parameters: [
-          { name: 'title',       value: "={{ $('Title Maker').item.json.message.content }}" },
-          { name: 'slug',        value: "={{ $('Generate Blog Metadata').item.json.output.slug }}" },
-          { name: 'alt_text',    value: "={{ $('Generate Image Prompt').item.json.output.altText }}" },
-          { name: 'caption',     value: "={{ $('Title Maker').item.json.message.content }}" },
-          { name: 'description', value: "=Professional bail bonds photography for Angels Bail Bonds article: {{ $('Title Maker').item.json.message.content }}" },
-        ],
-      },
-      options: {},
+      operation: 'create',
+      title: "={{ $('Title Maker').item.json.message.content }}",
+      content: `=# {{ $('Title Maker').item.json.message.content }}
+
+---
+**Keyword:** {{ $('Loop Over Items').item.json['Suggested Keyword'] }}
+**Search Volume:** {{ $('Loop Over Items').item.json['Search Volume'] }}
+**SERPROBOT Rank:** {{ $('Loop Over Items').item.json['serprobot_rank'] || 'Not tracked' }}
+**Meta Description:** {{ $('Generate Blog Metadata').item.json.output.metaDescription }}
+**Slug:** {{ $('Generate Blog Metadata').item.json.output.slug }}
+**Focus Keyword:** {{ $('Generate Blog Metadata').item.json.output.focusKeyword }}
+**Keywords:** {{ $('Generate Blog Metadata').item.json.output.keywords.join(', ') }}
+**Site:** ${SITE_URL}
+**Generated:** {{ $now }}
+
+---
+
+{{ $('Final Article Assembly').item.json.output }}`,
     },
   });
 
-  // Post to WordPress (draft)
+  // Update Google Doc with formatted HTML content (second pass — append SEO block)
   nodes.push({
-    id: 'wp-post',
-    name: 'Post Blog To WP',
-    type: 'n8n-nodes-base.wordpress',
-    typeVersion: 1,
-    position: [1420, 1080],
+    id: 'gdocs-meta',
+    name: 'Append SEO Metadata Block',
+    type: 'n8n-nodes-base.googleDocs',
+    typeVersion: 2,
+    position: [1440, 1080],
     parameters: {
-      title:            "={{ $('Title Maker').item.json.message.content }}",
-      additionalFields: {
-        authorId:  '=1',
-        content:   "={{ $('Final Article Assembly').item.json.output }}",
-        slug:      "={{ $('Generate Blog Metadata').item.json.output.slug }}",
-        status:    'draft',
-        excerpt:   "={{ $('Generate Blog Metadata').item.json.output.metaDescription }}",
-        categories: '=1',
+      operation: 'update',
+      documentURL: '={{ $json.id }}',
+      actionsUi: {
+        actionFields: [{
+          action: 'insert',
+          text: `=\n\n---\n## SEO Metadata\n\n- **slug**: {{ $('Generate Blog Metadata').item.json.output.slug }}\n- **metaTitle**: {{ $('Generate Blog Metadata').item.json.output.metaTitle }}\n- **metaDescription**: {{ $('Generate Blog Metadata').item.json.output.metaDescription }}\n- **focusKeyword**: {{ $('Generate Blog Metadata').item.json.output.focusKeyword }}\n- **keywords**: {{ $('Generate Blog Metadata').item.json.output.keywords.join(', ') }}\n- **imageAlt**: {{ $('Generate Image Prompt').item.json.output.altText }}\n- **imagePrompt**: {{ $('Generate Image Prompt').item.json.output.imagePrompt }}\n- **site**: ${SITE_URL}\n`,
+        }],
       },
     },
   });
 
-  // Set Featured Image
-  nodes.push({
-    id: 'wp-featured',
-    name: 'Set Featured Image',
-    type: 'n8n-nodes-base.httpRequest',
-    typeVersion: 4.2,
-    position: [1640, 1080],
-    parameters: {
-      method: 'POST',
-      url: `=${WP_URL}/wp-json/wp/v2/posts/{{ $json.id }}`,
-      authentication: 'predefinedCredentialType',
-      nodeCredentialType: 'wordpressApi',
-      sendBody: true,
-      bodyParameters: {
-        parameters: [
-          { name: 'featured_media', value: "={{ $('Update Image Meta').item.json.id }}" },
-        ],
-      },
-      options: {},
-    },
-  });
-
-  // Update Status in Google Sheets (Sheet3 — mark keyword as processed)
+  // Update Status in Google Sheets (Sheet3 Content Pipeline tab)
   nodes.push({
     id: 'gs-status',
     name: 'Update Content Status',
     type: 'n8n-nodes-base.googleSheets',
     typeVersion: 4.5,
-    position: [1860, 1080],
+    position: [1680, 1080],
     parameters: {
       operation: 'append',
       documentId: { __rl: true, value: SHEET_KEYWORD_INVENTORY, mode: 'id' },
@@ -882,13 +860,16 @@ Article excerpt: {{ $('Final Article Assembly').item.json.output.slice(0, 800) }
       columns: {
         mappingMode: 'defineBelow',
         value: {
-          'Suggested Keyword': "={{ $('Loop Over Items').item.json['Suggested Keyword'] }}",
-          'Status':            '=Published (Draft)',
-          'WP Post ID':        '={{ $json.id }}',
-          'WP URL':            `=https://angelsbailbonds.com/?p={{ $json.id }}`,
-          'Published At':      "={{ $now }}",
-          'Title':             "={{ $('Title Maker').item.json.message.content }}",
-          'Meta Description':  "={{ $('Generate Blog Metadata').item.json.output.metaDescription }}",
+          'Suggested Keyword':  "={{ $('Loop Over Items').item.json['Suggested Keyword'] }}",
+          'Status':             '=Ready for Review',
+          'Google Doc URL':     '={{ $json.documentUrl || $json.id }}',
+          'Generated At':       "={{ $now }}",
+          'Title':              "={{ $('Title Maker').item.json.message.content }}",
+          'Slug':               "={{ $('Generate Blog Metadata').item.json.output.slug }}",
+          'Meta Description':   "={{ $('Generate Blog Metadata').item.json.output.metaDescription }}",
+          'Focus Keyword':      "={{ $('Generate Blog Metadata').item.json.output.focusKeyword }}",
+          'SERPROBOT Rank':     "={{ $('Loop Over Items').item.json['serprobot_rank'] || 'N/A' }}",
+          'Search Volume':      "={{ $('Loop Over Items').item.json['Search Volume'] }}",
         },
       },
       options: {},
