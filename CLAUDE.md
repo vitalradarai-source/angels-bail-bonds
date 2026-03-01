@@ -69,12 +69,38 @@ angels-bail-bonds/
 - Run Trigger.dev: `npx trigger.dev@latest dev --env-file .env`
 - When reopening this project, Claude reads this file for full context
 
+## Claude Session Progress Logger — SKILL
+At end of every session (or when user says "log progress" / "save progress"):
+1. Collect all tasks worked on into 5 categories (completed, in_progress, todo, blockers, questions)
+2. Run: `node scripts/log-session-progress.mjs 'JSON_DATA'`
+3. This calls n8n webhook → updates Google Doc in Drive folder → creates ClickUp tasks (no duplicates)
+
+**Script:** `scripts/log-session-progress.mjs`
+**Webhook:** `https://n8n.srv1329589.hstgr.cloud/webhook/claude-progress`
+**n8n Workflow ID:** `EHsVxqcoGkHMajHC`
+**Google Drive folder:** `1JQeh1AMB02E1gIl_tqHKvvc3GQoHRbws` (daily progress docs)
+**ClickUp list:** `901414349243` (Angels Bail Bonds)
+**Date format in ClickUp task names:** `MM/DD/YY - Angelsbailbonds | task description`
+
+Example call:
+```bash
+node scripts/log-session-progress.mjs '{
+  "business": "Angelsbailbonds",
+  "completed": ["Task done"],
+  "in_progress": ["Task still running"],
+  "todo": ["Task not started"],
+  "blockers": ["Blocked by X"],
+  "questions": ["Question for client"]
+}'
+```
+
 ## Key Workflows in n8n
 | Workflow | ID | Description |
 |---|---|---|
+| Claude Session Progress Logger | EHsVxqcoGkHMajHC | **Active** — logs session tasks to Google Docs + ClickUp |
 | Complete SEO Automation | oszuSu23QtjeucvlR1aGp | Original (Dutch cycling site) — reference only |
 | Angels Bail Bonds SEO Content Generator | xnUQkL4nkbGvGIic | **Active** — ABB keyword sheets → Claude content → Google Docs |
-| SpyFu Report Analyzer | 9Xw3q2PtO1LPC4JH | SEO/PPC report via email |
+| SpyFu Report Analyzer | 9Xw3q2PtO1LPC4JH | SEO/PPC report via email (manual trigger) |
 
 ## ABB SEO Workflow (xnUQkL4nkbGvGIic) — Key Details
 - **Site**: https://bailbondsdomesticviolence.com (Lovable.dev / React — NOT WordPress)
@@ -109,3 +135,9 @@ angels-bail-bonds/
   - Incorporates all 4 keyword research Google Sheets
   - Outputs to Google Docs (not WordPress — site is Lovable.dev)
   - YMYL/EEAT bail bonds prompts for Claude claude-opus-4-6
+- 2026-03-01: Fixed Gmail 429 rate limit — SpyFu/Semrush/SEO-PPC all set to manual trigger only
+- 2026-03-01: Fixed Form Submissions Handler — Gmail node was creating drafts instead of sending
+- 2026-03-01: Built Claude Session Progress Logger (workflow ID: EHsVxqcoGkHMajHC)
+  - n8n webhook → Google Docs + ClickUp tasks (no duplicates)
+  - Script: scripts/log-session-progress.mjs
+  - Fix script: scripts/fix-progress-logger-workflow.mjs (patches workflow via API)

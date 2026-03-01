@@ -295,22 +295,27 @@ return [{
     },
   },
 
-  // 8. Google Docs: Append session text
+  // 8. HTTP Request: Append session text to Google Doc via batchUpdate
   {
     id: 'docs-append',
     name: 'Docs: Append Session',
-    type: 'n8n-nodes-base.googleDocs',
-    typeVersion: 2,
+    type: 'n8n-nodes-base.httpRequest',
+    typeVersion: 4.2,
     position: [1920, 300],
-    credentials: { googleDocsOAuth2Api: GOOGLE_DOCS_CRED },
+    credentials: { googleDriveOAuth2Api: GOOGLE_DRIVE_CRED },
     parameters: {
-      operation: 'update',
-      documentURL: '={{ "https://docs.google.com/document/d/" + $json.docId }}',
-      actionsUi: {
-        actionFields: [
-          { action: 'insert', text: '={{ $json.sessionText }}' },
-        ],
+      method: 'POST',
+      url: '={{ "https://docs.googleapis.com/v1/documents/" + $json.docId + ":batchUpdate" }}',
+      authentication: 'predefinedCredentialType',
+      nodeCredentialType: 'googleDriveOAuth2Api',
+      sendHeaders: true,
+      headerParameters: {
+        parameters: [{ name: 'Content-Type', value: 'application/json' }],
       },
+      sendBody: true,
+      contentType: 'raw',
+      rawContentType: 'application/json',
+      body: '={{ JSON.stringify({ requests: [{ insertText: { endOfSegmentLocation: { segmentId: "" }, text: $json.sessionText } }] }) }}',
     },
   },
 
